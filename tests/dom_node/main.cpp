@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <fstream>
 #include "dom_node.h"
 #include "parser.h"
 
@@ -108,6 +109,20 @@ bool assign_rules()
     return true;
 }
 
+void bson_dump()
+{
+    ofstream out("dump.bson", ios::binary | ios::out);
+
+    Spino::Parser parser(alloc);
+    Spino::DomNode* node = parser.parse("{\"test\":{\"name\":\"Shazdawg\",\"age\":400},\"gamerskillz\":9001.3}");
+    std::vector<uint8_t> bson;
+    node->to_bson(bson);
+
+    out.write((char*)&bson[0], bson.size());
+    out.close();
+}
+
+
 int main()
 {
     if (!parsing())
@@ -126,5 +141,6 @@ int main()
         return -1;
     }
 
+    bson_dump();
     return 0;
 }

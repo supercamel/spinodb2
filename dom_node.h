@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
 #include "allocator.h"
@@ -64,6 +65,7 @@ namespace Spino
         char *str;
         bool b;
         class DomNode *first;
+        uint8_t bytes[8];
     };
 
     class DomNode
@@ -117,38 +119,38 @@ namespace Spino
 
         bool is_numeric() const
         {
-            switch(type)
+            switch (type)
             {
-                case DOM_NODE_TYPE_DOUBLE:
-                case DOM_NODE_TYPE_INT:
-                case DOM_NODE_TYPE_UINT:
-                case DOM_NODE_TYPE_BOOL:
-                    return true;
-                default:
-                    return false;
+            case DOM_NODE_TYPE_DOUBLE:
+            case DOM_NODE_TYPE_INT:
+            case DOM_NODE_TYPE_UINT:
+            case DOM_NODE_TYPE_BOOL:
+                return true;
+            default:
+                return false;
             }
         }
 
         double get_numeric_as_double() const
         {
-            switch(type)
+            switch (type)
             {
-                case DOM_NODE_TYPE_DOUBLE:
-                    return value.d;
-                case DOM_NODE_TYPE_INT:
-                    return value.i;
-                case DOM_NODE_TYPE_UINT:
-                    return value.u;
-                case DOM_NODE_TYPE_BOOL:
-                    return value.b;
-                default:
-                    return 0;
+            case DOM_NODE_TYPE_DOUBLE:
+                return value.d;
+            case DOM_NODE_TYPE_INT:
+                return value.i;
+            case DOM_NODE_TYPE_UINT:
+                return value.u;
+            case DOM_NODE_TYPE_BOOL:
+                return value.b;
+            default:
+                return 0;
             }
         }
 
         bool operator==(const DomNode &other)
         {
-            if(is_numeric() && other.is_numeric())
+            if (is_numeric() && other.is_numeric())
             {
                 return get_numeric_as_double() == other.get_numeric_as_double();
             }
@@ -166,9 +168,9 @@ namespace Spino
             return false;
         }
 
-        bool operator>=(const DomNode& other)
+        bool operator>=(const DomNode &other)
         {
-            if(is_numeric() && other.is_numeric())
+            if (is_numeric() && other.is_numeric())
             {
                 return get_numeric_as_double() >= other.get_numeric_as_double();
             }
@@ -186,9 +188,9 @@ namespace Spino
             return false;
         }
 
-        bool operator<=(const DomNode& other)
+        bool operator<=(const DomNode &other)
         {
-            if(is_numeric() && other.is_numeric())
+            if (is_numeric() && other.is_numeric())
             {
                 return get_numeric_as_double() <= other.get_numeric_as_double();
             }
@@ -206,9 +208,9 @@ namespace Spino
             return false;
         }
 
-        bool operator>(const DomNode& other)
+        bool operator>(const DomNode &other)
         {
-            if(is_numeric() && other.is_numeric())
+            if (is_numeric() && other.is_numeric())
             {
                 return get_numeric_as_double() > other.get_numeric_as_double();
             }
@@ -226,9 +228,9 @@ namespace Spino
             return false;
         }
 
-        bool operator<(const DomNode& other)
+        bool operator<(const DomNode &other)
         {
-            if(is_numeric() && other.is_numeric())
+            if (is_numeric() && other.is_numeric())
             {
                 return get_numeric_as_double() < other.get_numeric_as_double();
             }
@@ -347,8 +349,8 @@ namespace Spino
             {
                 value.str = (char *)malloc(len);
             }
-            //strncpy(value.str, c, len);
-            for(size_t i = 0; i < len; i++)
+            // strncpy(value.str, c, len);
+            for (size_t i = 0; i < len; i++)
             {
                 value.str[i] = c[i];
             }
@@ -386,19 +388,19 @@ namespace Spino
 
         void push(DomNode *val)
         {
-            DomNode* d = push_in_place();
+            DomNode *d = push_in_place();
             *d = *val;
         }
 
         /**
          * @brief constructs a node and pushes it to the object, returns a pointer to the new node
-         * @return DomNode* 
+         * @return DomNode*
          */
-        DomNode* push_in_place()
+        DomNode *push_in_place()
         {
-            DomNode* node = (DomNode*)alloc.alloc();
-            node = new(node)DomNode(alloc);
-            DomNode* old_first = value.first;
+            DomNode *node = (DomNode *)alloc.alloc();
+            node = new (node) DomNode(alloc);
+            DomNode *old_first = value.first;
             value.first = node;
             node->next = old_first;
             return node;
@@ -407,25 +409,25 @@ namespace Spino
         DomNode *get_member(const char *key, int len) const
         {
             DomNode *iter = (DomNode *)value.first;
-            if(iter == nullptr) 
+            if (iter == nullptr)
             {
                 return nullptr;
             }
-            if(strncmp(iter->key, key, len) == 0)
+            if (strncmp(iter->key, key, len) == 0)
             {
                 return iter;
             }
-            iter = (DomNode*)iter->next;
+            iter = (DomNode *)iter->next;
 
-            if(iter == nullptr)
+            if (iter == nullptr)
             {
                 return nullptr;
             }
-            if(strncmp(iter->key, key, len)== 0)
+            if (strncmp(iter->key, key, len) == 0)
             {
                 return iter;
             }
-            iter = (DomNode*)iter->next;
+            iter = (DomNode *)iter->next;
 
             while (iter)
             {
@@ -466,27 +468,27 @@ namespace Spino
             return s.GetString();
         }
 
-        void copy(DomNode* other)
+        void copy(DomNode *other)
         {
             destroy();
             type = other->type;
-            if(type == DOM_NODE_TYPE_STRING)
+            if (type == DOM_NODE_TYPE_STRING)
             {
                 set_string(other->get_string(), strlen(other->get_string()));
             }
-            else if(type == DOM_NODE_TYPE_BOOL)
+            else if (type == DOM_NODE_TYPE_BOOL)
             {
                 set_bool(other->get_bool());
             }
-            else if(type == DOM_NODE_TYPE_DOUBLE)
+            else if (type == DOM_NODE_TYPE_DOUBLE)
             {
                 set_double(other->get_double());
             }
-            else if(type == DOM_NODE_TYPE_INT)
+            else if (type == DOM_NODE_TYPE_INT)
             {
                 set_int(other->get_int());
             }
-            else if(type == DOM_NODE_TYPE_UINT)
+            else if (type == DOM_NODE_TYPE_UINT)
             {
                 set_uint(other->get_uint());
             }
@@ -496,8 +498,159 @@ namespace Spino
             }
         }
 
-    private:
+        void from_not_bson(std::ifstream& fin)
+        {
+            switch(type) 
+            {
+                case DOM_NODE_TYPE_OBJECT: // object
+                case DOM_NODE_TYPE_ARRAY: // array
+                {
+                    do
+                    {
+                        char typec = fin.get();
+                        DomNode* child = push_in_place();
+                        child->type = (DOM_NODE_TYPE)typec;
+                        std::string key_string;
+                        while(fin.peek() != 0x00)
+                        {
+                            key_string += fin.get();
+                        }
+                        fin.get(); 
+                        
+                        child->from_not_bson(fin);
+                        if((child->type == DOM_NODE_TYPE_OBJECT) && (key_string.length() > 0))
+                        {
+                            child->set_key(key_string.c_str(), key_string.length());
+                        }
 
+                    } while(fin.peek() != 0x00);
+                    fin.get(); // read the end of object null char
+                }
+                break;
+                case DOM_NODE_TYPE_BOOL:
+                {
+                    set_bool(fin.get());
+                }
+                break;
+                case DOM_NODE_TYPE_INT:
+                {
+                    fin.read((char*)value.bytes, 4);
+                }
+                break;
+                case DOM_NODE_TYPE_UINT:
+                {
+                    fin.read((char*)&value.bytes[0], 8);
+                }
+                break;
+                case DOM_NODE_TYPE_DOUBLE:
+                {
+                    fin.read((char*)value.bytes, 8);
+                }
+                break;
+                case DOM_NODE_TYPE_STRING:
+                {
+                    DomNodeValue val;
+                    fin.read((char*)val.bytes, 4);
+                    char* pstr;
+                    if(val.i < DOM_ALLOCATOR_CHUNK_SIZE)
+                    {
+                        pstr = (char*)alloc.alloc();
+                    }
+                    else 
+                    {
+                        pstr = (char*)malloc(val.i);
+                    }
+                    fin.read(pstr, val.i);
+                    set_string(pstr, val.i);
+                }
+                break;
+                default:
+                break;
+            }
+        }
+
+        void to_not_bson(std::ofstream& fout) const
+        {
+            switch (get_type())
+            {
+            case DOM_NODE_TYPE_INVALID:
+            case DOM_NODE_TYPE_END:
+            case DOM_NODE_TYPE_NULL:
+                break;
+            case DOM_NODE_TYPE_BOOL:
+            {
+                if (get_bool())
+                {
+                    fout.put(0x01);
+                }
+                else
+                {
+                    fout.put(0x00);
+                }
+            }
+            break;
+            case DOM_NODE_TYPE_INT:
+            {
+                const uint8_t *pi = &value.bytes[0];
+                fout.write((char*)pi, 4);
+            }
+            break;
+            case DOM_NODE_TYPE_UINT:
+            {
+                const uint8_t *pi = &value.bytes[0];
+                fout.write((char*)pi, 8);
+            }
+            break;
+            case DOM_NODE_TYPE_DOUBLE:
+            {
+                const uint8_t *pi = &value.bytes[0];
+                fout.write((char*)pi, 8);
+            }
+            break;
+            case DOM_NODE_TYPE_STRING:
+            {
+                DomNodeValue lenval;
+                lenval.i = strlen(value.str) + 1;
+                const uint8_t *pi = &lenval.bytes[0];
+                fout.write((char*)pi, 4);
+                fout.write(value.str, lenval.i);
+            }
+            break;
+            case DOM_NODE_TYPE_ARRAY:
+            case DOM_NODE_TYPE_OBJECT:
+            {
+                DomNode *iter = (DomNode *)value.first;
+                int counter = 0;
+                while (iter)
+                {
+
+                    fout.put(iter->type);
+                    if (type == DOM_NODE_TYPE_ARRAY)
+                    {
+                        fout.put('a');
+                        fout.put(0x00);
+                        iter->to_not_bson(fout);
+                        iter->key = nullptr;
+                    }
+                    else
+                    {
+                        if(iter->key) {
+                            fout.write(iter->key, strlen(iter->key)+1);
+                        }
+                        else {
+                            fout.put(0x00);
+                        }
+                        iter->to_not_bson(fout);
+                    }
+                    iter = iter->next;
+                }
+                fout.put(0x00);
+            }
+            break;
+            }
+        }
+
+    private:
         void free_self()
         {
             if (key)
@@ -535,6 +688,23 @@ namespace Spino
                 type = DOM_NODE_TYPE_NULL;
             }
             break;
+            }
+        }
+
+        void key_to_buf(std::vector<uint8_t> &buf) const
+        {
+            if (key)
+            {
+                size_t len = strlen(key);
+                for (size_t i = 0; i < len; i++)
+                {
+                    buf.push_back(key[i]);
+                }
+                buf.push_back(0x00);
+            }
+            else
+            {
+                buf.push_back(0x00);
             }
         }
 

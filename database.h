@@ -183,28 +183,78 @@ namespace Spino
             return nullptr;
         }
 
-        void save(const char *path)
+        void save_not_bson_collection(std::string col_name, std::string path)
+        {
+            for (auto &col : collections)
+            {
+                if (col_name == col->get_name())
+                {
+                    ofstream out(path, ios::out | ios::binary);
+                    int count = 0;
+                    auto cursor = col->find("{}");
+
+                    while (cursor->has_next())
+                    {
+                        out.put(DOM_NODE_TYPE_OBJECT);
+                        cursor->next_dom()->to_not_bson(out);
+                    }
+                    out.put(0x00);
+                }
+            }
+        }
+
+        void load_not_bson_collection(std::string col_name, std::string path)
+        {
+            auto &col = get_collection(col_name.c_str());
+
+            ifstream ifile(path, ios::in | ios::binary);
+
+            while (ifile.get() == DOM_NODE_TYPE_OBJECT)
+            {
+                DomNode doc(col.get_allocator());
+                doc.set_object();
+                doc.from_not_bson(ifile);
+                col.append(&doc);
+            }
+        }
+
+        void
+        save_json(const char *path)
         {
             ofstream ofile;
             ofile.open(path);
             ofile << "{";
 
-            save_collection(ofile, kvstore);
+            save_json_collection(ofile, kvstore);
+
+            if (collections.size())
+            {
+                ofile << ",";
+                auto iter = collections.begin();
+                while (iter != collections.end())
+                {
+                    save_json_collection(ofile, *iter);
+                    iter++;
+                    if (iter != collections.end())
+                    {
+                        ofile << ",";
+                    }
+                }
+            }
 
             ofile << "}";
             ofile.close();
         }
 
     private:
-
-        void save_collection(ofstream& ofile, unique_ptr<Collection>& col)
+        void save_json_collection(ofstream &ofile, unique_ptr<Collection> &col)
         {
             ofile << "\"" << col->get_name() << "\":[";
             auto cursor = col->find("{}");
-            while(cursor->has_next())
+            while (cursor->has_next())
             {
                 ofile << cursor->next();
-                if(cursor->has_next())
+                if (cursor->has_next())
                 {
                     ofile << ",";
                 }
@@ -215,7 +265,6 @@ namespace Spino
         unique_ptr<Collection> kvstore;
         std::vector<unique_ptr<Collection>> collections;
     };
-
 }
 
 #endif
