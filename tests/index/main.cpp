@@ -6,40 +6,54 @@
 
 using namespace std;
 
-Spino::DomAllocator alloc;
+
+int find_first()
+{
+
+}
+
 
 int main()
 {
-    Spino::Index idx("count");
-    Spino::Parser parser(alloc);
+    Spino::GenericIndex idx("count");
+    Spino::Parser parser;
 
-    char json[128];
     for (int i = 0; i < 10; i++)
     {
         for (int j = 0; j < 3; j++)
         {
-            sprintf(json, "{\"count\":%i}", i);
-            auto *doc = parser.parse(json);
-            idx.insert(doc);
+            std::string json;
+            json = "{\"count\":";
+            json += std::to_string(i);
+            json += "}";
+
+            const Spino::DomView& view = parser.parse(json);
+            idx.insert(view);
         }
     }
 
+    cout << "printing" << endl;
     idx.print();
+    cout << "done" << endl;
 
-    sprintf(json, "{\"count\":3}");
+/*
+    Spino::DomNode node(alloc);
+    node.set_uint(3);
     parser.reset();
-    auto *doc = parser.parse(json);
-    auto *sln = idx.find_first(doc);
+    cout << "find first" << endl;
+    auto *sln = idx.find_first(&node);
+    cout << sln << endl;
+    cout << sln->dom_node->stringify() << endl;
+    cout << "done" << endl;
+
+    node.set_uint(9);
+    sln = idx.find_last(&node);
     cout << sln << endl;
     cout << sln->dom_node->stringify() << endl;
 
-    sprintf(json, "{\"count\": 8}");
-    doc = parser.parse(json);
-    sln = idx.find_last(doc);
-    cout << sln << endl;
-    cout << sln->dom_node->stringify() << endl;
-    sln = sln->get_next();
-    cout << sln->dom_node->stringify() << endl;
+    cout << "equal range" << endl;
+    auto range = idx.equal_range(&node);
+    */
 
     return 0;
 }

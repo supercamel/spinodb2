@@ -1,8 +1,17 @@
 CC=g++
-CFLAGS=-c -g -Wall -std=c++14 -I../../cppsrc -I../../
-LDFLAGS= -g
-SOURCES=$(wildcard *.cpp) ../../cppsrc/dom_node.cpp ../../cppsrc/dom_arr.cpp ../../cppsrc/dom_obj.cpp
-HEADERS=$(wildcard *.h) $(../../*.h)
+CFLAGS=-c -g -pg -Wall -std=c++14 -I../
+LDFLAGS= -g -pg
+SOURCES= main.cpp \
+		 query_executor.cpp \
+		 query_parse.cpp \
+		 dom_node.cpp \
+		 dom_arr.cpp \
+		 dom_node.cpp \
+		 database.cpp \
+		 collection.cpp \
+		 index.cpp
+
+HEADERS=$(wildcard *.h)
 OBJECTS=$(SOURCES:.cpp=.o)
 EXECUTABLE=main
 
@@ -16,7 +25,4 @@ $(EXECUTABLE): $(OBJECTS)  $(HEADERS)
 
 clean:
 	find . -name \*.o -execdir rm {} \;
-	cd ../../cppsrc && rm *.o
 	rm -f $(EXECUTABLE)
-
-
