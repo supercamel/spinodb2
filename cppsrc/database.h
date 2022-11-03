@@ -20,30 +20,31 @@ namespace Spino
     {
         public:
             Database();
-            Collection &get_collection(const char *name);
-            bool has_collection(const char *name);
-            void drop_collection(const char *name);
-            void set_bool_value(const char *key, bool value);
-            bool get_bool_value(const char *key);
-            void set_int_value(const char *key, int value);
-            int get_int_value(const char *key);
-            void set_uint_value(const char *key, unsigned int value);
-            unsigned int get_uint_value(const char *key);
-            void set_double_value(const char *key, double value);
-            double get_double_value(const char *key);
-            void set_string_value(const char *key, const char *value);
-            const char *get_string_value(const char *key);
-            bool has_key(const char* key);
-            FILE_ERROR save(std::string path);
-            FILE_ERROR load(std::string path);
-            void save_not_bson_collection(std::string col_name, std::string path);
-            void save_not_bson_keystore(std::string path);
-            void load_not_bson_collection(std::string col_name, std::string path);
-            void save_json(const char *path);
-            void enable_journal(std::string jpath);
+            ~Database();
+            Collection *get_collection(const std::string& name);
+            bool has_collection(const std::string& name) const;
+            void drop_collection(const std::string& name);
+            void set_bool_value(const std::string& key, bool value);
+            bool get_bool_value(const std::string& key) const;
+            void set_int_value(const std::string& key, int value);
+            int get_int_value(const std::string& key) const;
+            void set_uint_value(const std::string& key, unsigned int value);
+            unsigned int get_uint_value(const std::string& key) const;
+            void set_double_value(const std::string& key, double value);
+            double get_double_value(const std::string& key) const;
+            void set_string_value(const std::string& key, const std::string& value);
+            const char* get_string_value(const std::string& key) const;
+            bool has_key(const std::string& key) const;
+            FILE_ERROR save(const std::string& path) const;
+            FILE_ERROR load(const std::string& path);
+            void save_not_bson_collection(const std::string& col_name, const std::string& path) const;
+            void save_not_bson_keystore(const std::string& path) const;
+            void load_not_bson_collection(const std::string& col_name, const std::string& path);
+            void save_json(const std::string& path) const;
+            void enable_journal(const std::string& jpath);
             void disable_journal();
-            void consolidate(std::string path);
-            std::string execute(std::string json);
+            void consolidate(const std::string& path);
+            std::string execute(const std::string& json);
 
             void print_keystore()
             {
@@ -51,11 +52,11 @@ namespace Spino
             }
 
         private:
-            void save_json_collection(ofstream &ofile, unique_ptr<Collection> &col);
+            void save_json_collection(ofstream &ofile, Collection* col) const;
 
 
-            unique_ptr<Collection> kvstore;
-            std::vector<unique_ptr<Collection>> collections;
+            Collection* kvstore;
+            std::vector<Collection*> collections;
             JournalWriter jw;
     };
 }

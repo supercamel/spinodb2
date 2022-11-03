@@ -14,7 +14,6 @@ SpinoDatabase* spino_database_new();
 
 /**
  * spino_database_execute:
- * 
  * @self: The database object
  * @command: The command to execute
  * Returns: (transfer full): The result of the command
@@ -152,7 +151,7 @@ double spino_database_get_double_value(SpinoDatabase* self, const gchar* key);
  * spino_database_get_string_value:
  * @self: the self
  * @key: the key
- * Returns: (transfer full): the string value
+ * Returns: (transfer none): the string value
  */
 const gchar* spino_database_get_string_value(SpinoDatabase* self, const gchar* key);
 

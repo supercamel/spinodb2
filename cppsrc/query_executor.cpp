@@ -28,24 +28,21 @@ using namespace std;
 
 namespace Spino
 {
-    QueryExecutor::QueryExecutor(DomAllocator& alloc) : alloc(alloc)
+    QueryExecutor::QueryExecutor()
     {
-        stack.reserve(10);
-        tokens = nullptr;
     }
 
     void QueryExecutor::set_instructions(const std::vector<Token>* i)
     {
-        tokens = i;
+        tokens = *i;
     }
 
     bool QueryExecutor::execute_query(DomNode *document)
     {
-        if (tokens->size() == 0)
+        if (tokens.size() == 0)
         {
             return true;
         }
-
 
 /*
         while(stack.size())
@@ -56,413 +53,393 @@ namespace Spino
         }
         */
 
-        for (auto &tok : *tokens)
+        for (auto tok : tokens)
         {
             switch (tok.token)
             {
             case TOK_STRING_LITERAL:
             {
-                DomNode d(alloc);
-                d.set_string(tok.raw, tok.len);
+                DomNode* d = dom_node_allocator.make();
+                d->set_string(tok.raw, tok.len, true);
                 stack.push_back(d);
             }
             break;
             case TOK_NUMERIC_LITERAL:
             {
-                DomNode d(alloc);
-                d.set_double(tok.value);
+                DomNode* d = dom_node_allocator.make();
+                d->set_double(tok.value);
                 stack.push_back(d);
             }
             break;
             case TOK_BOOL_LITERAL:
             {
-                DomNode d(alloc);
-                d.set_bool(tok.raw[0] == 't');
+                DomNode* d = dom_node_allocator.make();
+                d->set_bool(tok.raw[0] == 't');
                 stack.push_back(d);
             }
             break;
             case TOK_FIELD_NAME:
             {
-                DomNode* tmp = document->get_member(tok.raw, tok.len);
-                if (tmp)
-                {
-                    DomNode d(alloc);
-                    d.copy(tmp);
+                std::string field_name = std::string(tok.raw, tok.len);
+                if(document->has_member(field_name)) {
+                    DomView tmp = document->get_member(field_name);
+                    DomNode* d = dom_node_allocator.make();
+                    d->copy(&tmp);
                     stack.push_back(d);
                 }
-                else
-                {
-                    DomNode d(alloc);
-                    d.set_invalid();
+                else {
+                    DomNode* d = dom_node_allocator.make();
+                    d->set_invalid();
                     stack.push_back(d);
                 }
             }
             break;
             case TOK_EQUAL:
             {
-                DomNode b = stack.back();
-                stack.pop_back();
-                DomNode a = stack.back();
-                stack.pop_back();
+                auto end = stack.end();
+                DomNode* b = *(--end);
+                DomNode* a = *(--end);
 
-                DomNode result(alloc);
-                if (a == b)
+                if (*a == *b)
                 {
-                    result.set_bool(true);
+                    a->set_bool(true);
                 }
                 else
                 {
-                    result.set_bool(false);
+                    a->set_bool(false);
                 }
-                a.destroy();
-                b.destroy();
-                stack.push_back(result);
+
+                stack.pop_back();
+                dom_node_allocator.delete_object(b);
             }
             break;
             case TOK_NE:
             {
-                DomNode b = stack.back();
-                stack.pop_back();
-                DomNode a = stack.back();
-                stack.pop_back();
+                auto end = stack.end();
+                DomNode* b = *--end;
+                DomNode* a = *--end;
 
-                DomNode result(alloc);
-                if (a == b)
+                if (*a == *b)
                 {
-                    result.set_bool(false);
+                    a->set_bool(false);
                 }
                 else
                 {
-                    result.set_bool(true);
+                    a->set_bool(true);
                 }
-                a.destroy();
-                b.destroy();
-                stack.push_back(result);
+                stack.pop_back();
+                dom_node_allocator.delete_object(b);
             }
             break;
             case TOK_RANGE:
             {
-                DomNode max = stack.back();
-                stack.pop_back();
-                DomNode min = stack.back();
-                stack.pop_back();
+                auto end = stack.end();
 
-                DomNode doc = stack.back();
-                stack.pop_back();
+                DomNode* max = *--end;
+                DomNode* min = *--end;
+                DomNode* doc = *--end;
 
-                DomNode result(alloc);
-                if (!doc.is_numeric())
+                DomNode* result = dom_node_allocator.make();
+                if (!doc->is_numeric())
                 {
-                    result.set_bool(false);
+                    result->set_bool(false);
                 }
                 else
                 {
-
-                    if ((doc >= min) && (doc <= max))
+                    if ((*doc >= *min) && (*doc <= *max))
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                     else
                     {
-                        result.set_bool(false);
+                        result->set_bool(false);
                     }
                 }
-                max.destroy();
-                min.destroy();
-                doc.destroy();
+
+                stack.erase(end, stack.end());
+                dom_node_allocator.delete_object(doc);
+                dom_node_allocator.delete_object(min);
+                dom_node_allocator.delete_object(max);
                 stack.push_back(result);
             }
             break;
             case TOK_GREATER_THAN:
             {
-                DomNode val = stack.back();
+                DomNode* val = stack.back();
                 stack.pop_back();
 
-                DomNode doc = stack.back();
+                DomNode* doc = stack.back();
                 stack.pop_back();
 
-                DomNode result(alloc);
-                if (!doc.is_numeric())
+                DomNode* result = dom_node_allocator.make();
+                if (!doc->is_numeric())
                 {
-                    result.set_bool(false);
+                    result->set_bool(false);
                 }
                 else
                 {
-                    if (doc > val)
+                    if (*doc > *val)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                     else
                     {
-                        result.set_bool(false);
+                        result->set_bool(false);
                     }
                 }
-                val.destroy();
-                doc.destroy();
+                dom_node_allocator.delete_object(doc);
+                dom_node_allocator.delete_object(val);
                 stack.push_back(result);
             }
             break;
             case TOK_LESS_THAN:
             {
-                DomNode val = stack.back();
+                DomNode* val = stack.back();
                 stack.pop_back();
 
-                DomNode doc = stack.back();
+                DomNode* doc = stack.back();
                 stack.pop_back();
 
-                DomNode result(alloc);
-                if (!doc.is_numeric())
+                DomNode* result = dom_node_allocator.make();
+                if (!doc->is_numeric())
                 {
-                    result.set_bool(false);
+                    result->set_bool(false);
                 }
                 else
                 {
-
-                    if (doc < val)
+                    if (*doc < *val)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                     else
                     {
-                        result.set_bool(false);
+                        result->set_bool(false);
                     }
                 }
-                val.destroy();
-                doc.destroy();
+                dom_node_allocator.delete_object(doc);
+                dom_node_allocator.delete_object(val);
                 stack.push_back(result);
             }
             break;
             case TOK_EXISTS:
             {
-                DomNode exists = stack.back();
-                stack.pop_back();
-                DomNode val = stack.back();
+                DomNode* val = stack.back();
                 stack.pop_back();
 
-                DomNode result(alloc);
-                if (val.get_type() == DOM_NODE_TYPE_INVALID)
+                DomNode* exists = stack.back();
+
+                if (val->get_type() == DOM_NODE_TYPE_INVALID)
                 {
-                    result.set_bool(!exists.get_bool());
-                }
-                else
-                {
-                    result.set_bool(exists.get_bool());
+                    exists->set_bool(!exists->get_bool());
                 }
 
-                val.destroy();
-                stack.push_back(result);
+                dom_node_allocator.delete_object(val);
             }
             break;
             case TOK_AND:
             {
-                int count = stack.back().get_double();
+                DomNode* result = stack.back();
+                int count = result->get_double();
                 stack.pop_back();
 
-                DomNode result(alloc);
-                result.set_bool(true);
+                result->set_bool(true);
                 while (--count)
                 {
                     auto v = stack.back();
                     stack.pop_back();
-                    if (v.get_bool() == false)
+                    if (v->get_bool() == false)
                     {
-                        result.set_bool(false);
+                        result->set_bool(false);
                     }
-                    v.destroy();
+                    dom_node_allocator.delete_object(v);
                 }
                 stack.push_back(result);
             }
             break;
             case TOK_OR:
             {
-                int count = stack.back().get_double();
+                DomNode* result = stack.back();
+                int count = result ->get_double();
                 stack.pop_back();
 
-                DomNode result(alloc);
-                result.set_bool(false);
+                result->set_bool(false);
                 while (--count)
                 {
                     auto v = stack.back();
                     stack.pop_back();
-                    if (v.get_bool() == true)
+                    if (v->get_bool() == true)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
-                    v.destroy();
+                    dom_node_allocator.delete_object(v);
                 }
                 stack.push_back(result);
             }
             break;
             case TOK_TYPE:
             {
-                DomNode type_str = stack.back();
+                DomNode* type_str = stack.back();
                 stack.pop_back();
 
-                DomNode field = stack.back();
+                DomNode* field = stack.back();
                 stack.pop_back();
 
-                DomNode result(alloc);
-                result.set_bool(false);
-                if (strcmp(type_str.get_string(), "bool") == 0)
+                DomNode* result = dom_node_allocator.make();
+                result->set_bool(false);
+                if (strncmp(type_str->get_string(), "bool", 4) == 0)
                 {
-                    if (field.get_type() == DOM_NODE_TYPE_BOOL)
+                    if (field->get_type() == DOM_NODE_TYPE_BOOL)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                 }
-                else if (strcmp(type_str.get_string(), "number") == 0)
+                else if (strncmp(type_str->get_string(), "number", 6) == 0)
                 {
-                    if (field.is_numeric() && (field.get_type() != DOM_NODE_TYPE_BOOL))
+                    if (field->is_numeric() && (field->get_type() != DOM_NODE_TYPE_BOOL))
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                 }
-                else if (strcmp(type_str.get_string(), "string") == 0)
+                else if (strncmp(type_str->get_string(), "string", 6) == 0)
                 {
-                    if (field.get_type() == DOM_NODE_TYPE_STRING)
+                    if (field->is_string())
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                 }
-                else if (strcmp(type_str.get_string(), "array") == 0)
+                else if (strncmp(type_str->get_string(), "array", 5) == 0)
                 {
-                    if (field.get_type() == DOM_NODE_TYPE_ARRAY)
+                    if (field->get_type() == DOM_NODE_TYPE_ARRAY)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                 }
-                else if (strcmp(type_str.get_string(), "object") == 0)
+                else if (strncmp(type_str->get_string(), "object", 6) == 0)
                 {
-                    if (field.get_type() == DOM_NODE_TYPE_OBJECT)
+                    if (field->get_type() == DOM_NODE_TYPE_OBJECT)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                 }
-                else if (strcmp(type_str.get_string(), "null") == 0)
+                else if (strncmp(type_str->get_string(),"null", 4) == 0)
                 {
-                    if (field.get_type() == DOM_NODE_TYPE_NULL)
+                    if (field->get_type() == DOM_NODE_TYPE_NULL)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                 }
-                field.destroy();
+                dom_node_allocator.delete_object(type_str);
+                dom_node_allocator.delete_object(field);
                 stack.push_back(result);
             }
             break;
             case TOK_STARTS_WITH:
             {
-                DomNode val = stack.back();
+                DomNode* val = stack.back();
                 stack.pop_back();
 
-                DomNode field = stack.back();
+                DomNode* field = stack.back();
                 stack.pop_back();
 
-                DomNode result(alloc);
-                if (field.get_type() == DOM_NODE_TYPE_STRING)
+                DomNode* result = dom_node_allocator.make();
+                if (field->is_string())
                 {
-                    if (strncmp(field.get_string(), val.get_string(), strlen(val.get_string())) == 0)
+                    std::string field_string = field->get_string();
+                    if (field_string.rfind(val->get_string(), 0) == 0)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
                     else
                     {
-                        result.set_bool(false);
+                        result->set_bool(false);
                     }
                 }
                 else
                 {
-                    result.set_bool(false);
+                    result->set_bool(false);
                 }
 
-                field.destroy();
-                val.destroy();
+                dom_node_allocator.free(field);
+                dom_node_allocator.free(val);
                 stack.push_back(result);
             }
             break;
             case TOK_IN:
             {
-                size_t length = stack.back().get_double();
+                DomNode *lenvar = stack.back();
+                size_t length = lenvar->get_double();
+
                 stack.pop_back();
+                dom_node_allocator.delete_object(lenvar);
 
-                DomNode field = stack[stack.size() - (length + 1)];
+                DomNode* field = stack[stack.size()-(length+1)];
+                DomNode* result = dom_node_allocator.make();
 
-                DomNode result(alloc);
-                result.set_bool(false);
-                while (--length)
+                result->set_bool(false);
+                while (length--)
                 {
-                    DomNode val = stack.back();
+                    DomNode* val = stack.back();
                     stack.pop_back();
 
-                    if (field == val)
+                    if (*field == *val)
                     {
-                        result.set_bool(true);
+                        result->set_bool(true);
                     }
-                    val.destroy();
+                    dom_node_allocator.delete_object(val);
                 }
 
                 stack.pop_back();
-                field.destroy();
+                dom_node_allocator.delete_object(field);
 
                 stack.push_back(result);
             }
             break;
             case TOK_NIN:
             {
-                size_t length = stack.back().get_double();
+                DomNode* result = stack.back();
+                size_t length = result->get_double();
                 stack.pop_back();
 
-                DomNode field = stack[stack.size() - (length + 1)];
+                DomNode* field = stack[stack.size() - (length + 1)];
 
-                DomNode result(alloc);
-                result.set_bool(true);
-                while (--length)
+                result->set_bool(true);
+                while (length--)
                 {
-                    DomNode val = stack.back();
+                    DomNode* val = stack.back();
                     stack.pop_back();
 
-                    if (field == val)
+                    if (*field == *val)
                     {
-                        result.set_bool(false);
+                        result->set_bool(false);
                     }
-                    val.destroy();
+                    dom_node_allocator.delete_object(val);
                 }
 
                 stack.pop_back();
-                field.destroy();
-
+                dom_node_allocator.delete_object(field);
                 stack.push_back(result);
             }
             break;
             case TOK_NOT:
             {
-                DomNode val = stack.back();
-                stack.pop_back();
-
-                DomNode result(alloc);
-                result.set_bool(!val.get_bool());
-                val.destroy();
-                stack.push_back(result);
+                DomNode* val = stack.back();
+                val->set_bool(!val->get_bool());
             }
             break;
             case TOK_REGEX:
             {
-                DomNode field = stack.back();
-                stack.pop_back();
-                DomNode result(alloc);
-                if (field.get_type() == DOM_NODE_TYPE_STRING)
+                DomNode* field = stack.back();
+                if (field->is_string())
                 {
                     std::smatch base_match;
                     const std::regex reg = *tok.regex;
-                    std::string str = field.get_string();
-                    result.set_bool(std::regex_match(str, base_match, reg));
+                    std::string str = field->get_string();
+                    field->set_bool(std::regex_match(str, base_match, reg));
                 }
                 else
                 {
-                    result.set_bool(false);
+                    field->set_bool(false);
                 }
-
-                field.destroy();
-                stack.push_back(result);
             }
             break;
             case TOK_RH_BRACE:
@@ -477,7 +454,12 @@ namespace Spino
             }
         }
 
-        return stack.back().get_bool();
+        bool result = stack.back()->get_bool();
+        while(stack.size()) {
+            dom_node_allocator.delete_object(stack.back());
+            stack.pop_back();
+        }
+        return result;
     }
 
 }

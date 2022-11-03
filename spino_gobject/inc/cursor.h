@@ -9,17 +9,17 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE(SpinoCursor, spino_cursor, Spino, Cursor, GObject)
 
+/**
+ * spino_cursor_next:
+ * @self: the self
+ * Returns: (transfer full):
+ */
 gchar* spino_cursor_next(SpinoCursor* self);
 gboolean spino_cursor_has_next(SpinoCursor* self);
 
-/**
- * spino_cursor_set_limit:
- * @self: the self
- * @limit: the maximum number of documents the cursor can return 
- * Returns: (transfer none):
- */
-SpinoCursor* spino_cursor_set_limit(SpinoCursor* self, guint limit);
+void spino_cursor_set_limit(SpinoCursor* self, guint limit);
 
+guint spino_cursor_count(SpinoCursor* self);
 
 G_END_DECLS
 

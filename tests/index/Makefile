@@ -1,6 +1,6 @@
 CC=g++
-CFLAGS=-c -g -Wall -std=c++14 -I../../cppsrc -I../../
-LDFLAGS= -g
+CFLAGS=-c -O3 -Wall -std=c++14 -I../../cppsrc -I../../
+LDFLAGS= -O3
 SOURCES=$(wildcard *.cpp) ../../cppsrc/collection.cpp ../../cppsrc/database.cpp ../../cppsrc/dom_node.cpp ../../cppsrc/index.cpp ../../cppsrc/query_executor.cpp ../../cppsrc/query_parse.cpp
 HEADERS=$(wildcard *.h) $(../../*.h)
 OBJECTS=$(SOURCES:.cpp=.o)

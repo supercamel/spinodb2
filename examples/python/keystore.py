@@ -10,6 +10,9 @@ db1 = Spino.Database.new()
 
 print("set int value")
 db1.set_int_value("ikey", -15)
+if(db1.get_int_value("ikey") != -15):
+    print("error: set int value")
+    exit(1)
 print("set uint value")
 db1.set_uint_value("ukey", 2)
 print("set double key")

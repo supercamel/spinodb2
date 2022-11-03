@@ -22,17 +22,19 @@
 
 #include <sstream>
 #include <set>
+#include "collection.h"
 
 using namespace std;
 
 using namespace Spino;
 
-QueryParser::QueryParser(DomAllocator &alloc, const std::vector<std::unique_ptr<Index>> &indicies, const char *query) : alloc(alloc), indicies(indicies)
+QueryParser::QueryParser(const std::vector<Index> &indicies, const char *query) : indicies(indicies)
 {
     query_string = query;
     cursor = 0;
     instructions.reserve(10);
 }
+
 
 Token QueryParser::peek()
 {
@@ -127,7 +129,7 @@ inline Token QueryParser::lex()
             {
                 return Token(TOK_NOT, nullptr, 0);
             }
-            else if (strncmp(start, "in", 3) == 0)
+            else if (strncmp(start, "in", 2) == 0)
             {
                 return Token(TOK_IN, nullptr, 0);
             }
@@ -153,7 +155,7 @@ inline Token QueryParser::lex()
             }
             else
             {
-                throw parse_error("Unknown $ operator");
+                throw parse_error("Unknown $ operator " + string(start, 10));
             }
         }
         break;
@@ -241,48 +243,46 @@ double QueryParser::read_numeric_literal()
     return result;
 }
 
-DomNode QueryParser::token_literal_to_node(Token t)
+DomNode* QueryParser::token_literal_to_node(Token t)
 {
     switch (t.token)
     {
     case TOK_BOOL_LITERAL:
     {
-        DomNode node(alloc);
+        DomNode* node = dom_node_allocator.make();
         if (t.raw[0] == 't')
         {
-            node.set_bool(true);
+            node->set_bool(true);
         }
         else
         {
-            node.set_bool(false);
+            node->set_bool(false);
         }
         return node;
     }
     break;
     case TOK_STRING_LITERAL:
     {
-        DomNode node(alloc);
-        node.set_string(t.raw, t.len);
+        DomNode* node = dom_node_allocator.make();
+        node->set_string(t.raw, t.len, true);
         return node;
     }
     break;
     case TOK_NUMERIC_LITERAL:
     {
-        DomNode node(alloc);
-        node.set_double(t.value);
+        DomNode* node = dom_node_allocator.make();
+        node->set_double(t.value);
         return node;
     }
     break;
     default:
     {
-        DomNode node(alloc);
-        node.set_invalid();
-        return node;
+        return nullptr;
     }
     }
 }
 
-std::vector<Token> &QueryParser::parse_query(Index::Range &_range)
+std::vector<Token>* QueryParser::parse_query(IndexIteratorRange &_range)
 {
     instructions.clear();
 
@@ -294,14 +294,14 @@ std::vector<Token> &QueryParser::parse_query(Index::Range &_range)
     }
     else
     {
-        _range.first = indicies[0]->begin();
-        _range.last = nullptr;
+        _range.first = indicies[0].index.begin();
+        _range.second = indicies[0].index.end();
     }
-    return instructions;
+    return &instructions;
 }
 
 /* an expression can have the form
- * { <field_name>: <operator_expression> }
+ * { <field_name> OR <string_litera>: <operator_expression> }
  * { $and/$or: { [ <expression1>, <expression2>,...<expressionN> ] }
  * { $not: { <expression> }}
  */
@@ -310,10 +310,14 @@ void QueryParser::parse_expression()
     if (lex().token == TOK_LH_BRACE)
     {
         auto tok = lex();
+        if(tok.token == TOK_RH_BRACE) {
+            return;
+        }
         // if the token is a field, parse rhs
-        if (tok.token == TOK_FIELD_NAME)
+        else if ((tok.token == TOK_FIELD_NAME) || (tok.token == TOK_STRING_LITERAL))
         {
             Token field_name = tok;
+            field_name.token = TOK_FIELD_NAME;
             tok = lex();
             if (tok.token != TOK_COLON)
             {
@@ -330,18 +334,19 @@ void QueryParser::parse_expression()
                     for (auto &idx : indicies)
                     {
                         std::string s(field_name.raw, field_name.len);
-                        if (s == idx->get_key())
+                        if (s == idx.field_name)
                         {
                             Token t = instructions.back();
-                            DomNode top = token_literal_to_node(t);
+                            DomNode* top = token_literal_to_node(t);
                             instructions.pop_back();
-                            range = idx->equal_range(&top);
-                            top.destroy();
+                            range = idx.index.equal_range(*top);
+                            dom_node_allocator.delete_object(top);
                             index_resolved = true;
                             if (lex().token != TOK_RH_BRACE)
                             {
                                 throw parse_error("Missing close brace after field comparison");
                             }
+
                             return;
                         }
                     }
@@ -435,6 +440,9 @@ void QueryParser::parse_expression()
             }
             instructions.push_back(Token(TOK_NOT));
         }
+        else {
+            throw parse_error("Unexpected token");
+        }
     }
     else
     {
@@ -500,13 +508,14 @@ void QueryParser::parse_operator_expression()
                 std::string field_name(field.raw, field.len);
                 for(auto& idx : indicies)
                 {
-                    if(field_name == idx->get_key())
+                    if(field_name == idx.field_name)
                     {
-                        DomNode min = token_literal_to_node(instructions.back());
+                        DomNode* min = token_literal_to_node(instructions.back());
                         instructions.pop_back(); // pop the literal value
                         instructions.pop_back(); // pop the field name
-                        range.first = idx->greater_than(&min);
-                        range.last = nullptr;
+                        range.first = idx.index.upper_bound(*min);
+                        range.second = idx.index.end();
+                        dom_node_allocator.delete_object(min);
                         index_resolved = true;
                         return;
                     }
@@ -535,13 +544,14 @@ void QueryParser::parse_operator_expression()
                 std::string field_name(field.raw, field.len);
                 for(auto& idx : indicies)
                 {
-                    if(field_name == idx->get_key())
+                    if(field_name == idx.field_name)
                     {
-                        DomNode max = token_literal_to_node(instructions.back());
+                        DomNode* max = token_literal_to_node(instructions.back());
                         instructions.pop_back(); // pop the literal value
                         instructions.pop_back(); // pop the field name
-                        range.first = nullptr;
-                        range.last = idx->less_than(&max);
+                        range.first = idx.index.begin();
+                        range.second = idx.index.lower_bound(*max);
+                        dom_node_allocator.delete_object(max);
                         index_resolved = true;
                         return;
                     }
@@ -603,15 +613,18 @@ void QueryParser::parse_operator_expression()
                 std::string field_name(field.raw, field.len);
                 for(auto& idx : indicies)
                 {
-                    if(field_name == idx->get_key())
+                    if(field_name == idx.field_name)
                     {
-                        DomNode max = token_literal_to_node(instructions.back());
+                        DomNode* max = token_literal_to_node(instructions.back());
                         instructions.pop_back();
-                        DomNode min = token_literal_to_node(instructions.back());
+                        DomNode* min = token_literal_to_node(instructions.back());
                         instructions.pop_back();
 
-                        range.first = idx->find_first(&min);
-                        range.last = idx->find_last(&max);
+                        range.first = idx.index.lower_bound(*min);
+                        range.second = idx.index.upper_bound(*max);
+
+                        dom_node_allocator.delete_object(min);
+                        dom_node_allocator.delete_object(max);
 
                         instructions.pop_back(); //pop the field name
                         index_resolved = true;
@@ -802,3 +815,16 @@ void QueryParser::parse_literal_list()
         }
     } while (tok.token != TOK_RH_BRACKET);
 }
+
+/**
+ * A field name has the form
+ * "field_name"
+ * or
+ * "field_name"."subfield_name"."subsubfield_name"
+ */
+/*
+void QueryParser::parse_field_name() 
+{
+
+}
+*/

@@ -1,15 +1,31 @@
 #include "dom_obj.h"
 #include <sstream>
+#include "dom_node.h"
 
 namespace Spino {
+    const DomView& MemberIterator::operator*() const
+    {
+        return *(it->second);
+    }
+
+    const DomView* MemberIterator::operator->() const
+    {
+        return it->second;
+    }
+
+    const DomView& MemberIterator::get_value()
+    {
+        return *(it->second);
+    }
 
     DomObject::DomObject() {
 
     }
 
     DomObject::~DomObject() {
-        for(auto i : members) {
-            delete i.second;
+        for(auto& i : members) {
+            //delete i.second;
+            dom_node_allocator.delete_object(i.second);
         }
     }
 
@@ -25,11 +41,9 @@ namespace Spino {
         }
     }
 
-    void DomObject::append(const std::string& key, DomNode& val)
+    void DomObject::append(const std::string& key, DomNode* val)
     {
-        DomNode* n = new DomNode();
-        *n = val;
-        members.insert({key, n});
+        members.insert({key, val});
     }
 
     const DomView& DomObject::get_member(const std::string& key, size_t len) const
@@ -48,23 +62,21 @@ namespace Spino {
     }
 
 
-    std::string DomObject::stringify() const
+    void DomObject::stringify(rapidjson::Writer<rapidjson::StringBuffer>& sb) const
     {
-        std::stringstream ss;
-        ss << "{";
+        sb.StartObject();
+
         size_t count = 0;
         size_t sz = members.size();
 
         for(auto& i : members) {
-            ss << "\"" << escape(i.first) << "\":" << i.second->stringify();
-            if(++count != sz) {
-                ss << ",";
-            }
+            sb.Key(i.first.c_str());
+            i.second->stringify(sb);
         }
-        ss << "}";
-        return ss.str();
+        sb.EndObject();
     }
 
+    DomObjectAllocatorType dom_object_allocator;
 }
 
 

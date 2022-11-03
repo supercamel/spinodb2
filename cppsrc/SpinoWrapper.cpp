@@ -57,9 +57,7 @@ void CursorWrapper::Init(Isolate* isolate){
     NODE_SET_PROTOTYPE_METHOD(tpl, "next", next);
     NODE_SET_PROTOTYPE_METHOD(tpl, "toArray", toArray);
     NODE_SET_PROTOTYPE_METHOD(tpl, "count", count);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "setProjection", setProjection);
     NODE_SET_PROTOTYPE_METHOD(tpl, "setLimit", setLimit);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "runScript", runScript);
 
     Local<Context> context = isolate->GetCurrentContext();
     constructor.Reset(isolate, tpl->GetFunction(context).ToLocalChecked());
@@ -70,7 +68,7 @@ void CursorWrapper::Init(Isolate* isolate){
 
 }
 
-void CursorWrapper::NewInstance(const v8::FunctionCallbackInfo<v8::Value>& args, Spino::Cursor* cur) {
+void CursorWrapper::NewInstance(const v8::FunctionCallbackInfo<v8::Value>& args, shared_ptr<Spino::Cursor> cur) {
     Isolate* isolate = args.GetIsolate();
 
     auto cons = Local<Function>::New(isolate, constructor);
@@ -110,7 +108,7 @@ void CursorWrapper::toArray(const v8::FunctionCallbackInfo<v8::Value>& args) {
 void CursorWrapper::hasNext(const v8::FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
     CursorWrapper* curwrap = ObjectWrap::Unwrap<CursorWrapper>(args.Holder());
-    bool hasnext = curwrap->cursor->hasNext();
+    bool hasnext = curwrap->cursor->has_next();
     args.GetReturnValue().Set(v8::Boolean::New(isolate, hasnext));
 }
 
@@ -130,26 +128,13 @@ void CursorWrapper::count(const v8::FunctionCallbackInfo<v8::Value>& args) {
     args.GetReturnValue().Set(v8::Number::New(isolate, curwrap->cursor->count()));
 }
 
-void CursorWrapper::setProjection(const v8::FunctionCallbackInfo<v8::Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    CursorWrapper* curwrap = ObjectWrap::Unwrap<CursorWrapper>(args.Holder());
-
-    if(args[0]->IsString()) {
-        v8::String::Utf8Value str(isolate, args[0]);
-
-        curwrap->cursor->setProjection(*str);
-    }
-
-    args.GetReturnValue().Set(args.Holder());
-}
-
 void CursorWrapper::setLimit(const v8::FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
     CursorWrapper* curwrap = ObjectWrap::Unwrap<CursorWrapper>(args.Holder());
 
     if(args[0]->IsNumber()) {
         uint32_t limit = args[0].As<Number>()->Value();
-        curwrap->cursor->setLimit(limit);
+        curwrap->cursor->set_limit(limit);
     }
     else {
         isolate->ThrowException(Exception::TypeError(
@@ -160,24 +145,6 @@ void CursorWrapper::setLimit(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
     args.GetReturnValue().Set(args.Holder());
 }
-
-void CursorWrapper::runScript(const v8::FunctionCallbackInfo<v8::Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    CursorWrapper* curwrap = ObjectWrap::Unwrap<CursorWrapper>(args.Holder());
-    if(args[0]->IsString()) {
-        v8::String::Utf8Value str(isolate, args[0]);
-
-        std::string result = curwrap->cursor->runScript(*str);
-        args.GetReturnValue().Set(
-                String::NewFromUtf8(isolate, result.c_str()).ToLocalChecked());
-    }
-    else {
-        isolate->ThrowException(Exception::TypeError(
-                    String::NewFromUtf8(isolate,
-                        "expected parameter for runScript to be a string").ToLocalChecked()));
-    }
-}
-
 
 void CollectionWrapper::Init(Isolate* isolate){
     // Prepare constructor template
@@ -190,16 +157,11 @@ void CollectionWrapper::Init(Isolate* isolate){
     NODE_SET_PROTOTYPE_METHOD(tpl, "createIndex", createIndex);
     NODE_SET_PROTOTYPE_METHOD(tpl, "dropIndex", dropIndex);
     NODE_SET_PROTOTYPE_METHOD(tpl, "append", append);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "updateById", updateById);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "update", update);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "findOneById", findOneById);
+    NODE_SET_PROTOTYPE_METHOD(tpl, "upsert", upsert);
     NODE_SET_PROTOTYPE_METHOD(tpl, "findOne", findOne);
     NODE_SET_PROTOTYPE_METHOD(tpl, "find", find);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "dropById", dropById);
     NODE_SET_PROTOTYPE_METHOD(tpl, "dropOne", dropOne);
     NODE_SET_PROTOTYPE_METHOD(tpl, "drop", drop);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "dropOlderThan", dropOlderThan);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "timestampById", timestampById);
 
     Local<Context> context = isolate->GetCurrentContext();
     constructor.Reset(isolate, tpl->GetFunction(context).ToLocalChecked());
@@ -224,7 +186,7 @@ void CollectionWrapper::NewInstance(const v8::FunctionCallbackInfo<v8::Value>& a
 void CollectionWrapper::getName(const v8::FunctionCallbackInfo<v8::Value>& args) {
     Isolate* isolate = args.GetIsolate();
     CollectionWrapper* collectionwrap = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
-    auto name = collectionwrap->collection->getName();
+    auto name = collectionwrap->collection->get_name();
     args.GetReturnValue().Set(String::NewFromUtf8(isolate, name.c_str()).ToLocalChecked());
 }
 
@@ -234,7 +196,7 @@ void CollectionWrapper::createIndex(const FunctionCallbackInfo<Value>& args) {
 
     CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
 
-    obj->collection->createIndex(*str);
+    obj->collection->create_index(*str);
 }
 
 void CollectionWrapper::dropIndex(const FunctionCallbackInfo<Value>& args) {
@@ -243,7 +205,7 @@ void CollectionWrapper::dropIndex(const FunctionCallbackInfo<Value>& args) {
 
     CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
 
-    obj->collection->dropIndex(*str);
+    obj->collection->drop_index(*str);
 }
 
 void CollectionWrapper::append(const FunctionCallbackInfo<Value>& args) {
@@ -262,17 +224,7 @@ void CollectionWrapper::append(const FunctionCallbackInfo<Value>& args) {
     }
 }
 
-void CollectionWrapper::updateById(const FunctionCallbackInfo<Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    v8::String::Utf8Value idstr(isolate, args[0]);
-    v8::String::Utf8Value update(isolate, args[1]);
-
-    CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
-
-    obj->collection->updateById(*idstr, *update);
-}
-
-void CollectionWrapper::update(const FunctionCallbackInfo<Value>& args) {
+void CollectionWrapper::upsert(const FunctionCallbackInfo<Value>& args) {
     Isolate* isolate = args.GetIsolate();
     v8::String::Utf8Value findstr(isolate, args[0]);
     v8::String::Utf8Value update(isolate, args[1]);
@@ -280,7 +232,7 @@ void CollectionWrapper::update(const FunctionCallbackInfo<Value>& args) {
     CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
 
     try {
-        obj->collection->update(*findstr, *update);
+        obj->collection->upsert(*findstr, *update);
     }
     catch(Spino::parse_error& err){
         isolate->ThrowException(Exception::TypeError(
@@ -300,17 +252,6 @@ void CollectionWrapper::update(const FunctionCallbackInfo<Value>& args) {
 
 }
 
-void CollectionWrapper::findOneById(const FunctionCallbackInfo<Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    v8::String::Utf8Value idstr(isolate, args[0]);
-
-    CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
-    auto f = obj->collection->findOneById(*idstr);
-    if(f != "") {
-        args.GetReturnValue().Set(String::NewFromUtf8(isolate, f.c_str()).ToLocalChecked());
-    }
-}
-
 void CollectionWrapper::findOne(const FunctionCallbackInfo<Value>& args) {
     Isolate* isolate = args.GetIsolate();
     v8::String::Utf8Value str(isolate, args[0]);
@@ -318,7 +259,13 @@ void CollectionWrapper::findOne(const FunctionCallbackInfo<Value>& args) {
     std::string f;
     CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
     try {
-        f = obj->collection->findOne(*str);
+        Spino::DomView* view = obj->collection->find_one(*str);
+        if(view != nullptr) {
+            f = view->stringify();
+        }
+        else {
+            f = "";
+        }
     }
     catch(Spino::parse_error& err){
         isolate->ThrowException(Exception::TypeError(
@@ -350,7 +297,7 @@ void CollectionWrapper::find(const FunctionCallbackInfo<Value>& args) {
         auto cursor = obj->collection->find(*str);
         if(args.Length() >= 2) {
             uint32_t limit = args[1].As<Number>()->Value();
-            cursor = cursor->setLimit(limit);
+            cursor = cursor->set_limit(limit);
         }
         CursorWrapper::NewInstance(args, cursor);
     }
@@ -372,22 +319,13 @@ void CollectionWrapper::find(const FunctionCallbackInfo<Value>& args) {
 
 }
 
-void CollectionWrapper::dropById(const FunctionCallbackInfo<Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    v8::String::Utf8Value findstr(isolate, args[0]);
-
-    CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
-
-    obj->collection->dropById(*findstr);
-}
-
 void CollectionWrapper::dropOne(const FunctionCallbackInfo<Value>& args) {
     Isolate* isolate = args.GetIsolate();
     v8::String::Utf8Value findstr(isolate, args[0]);
 
     CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
 
-    obj->collection->dropOne(*findstr);
+    obj->collection->drop(*findstr, 1);
 }
 
 void CollectionWrapper::drop(const FunctionCallbackInfo<Value>& args) {
@@ -404,28 +342,8 @@ void CollectionWrapper::drop(const FunctionCallbackInfo<Value>& args) {
     args.GetReturnValue().Set(v8::Number::New(isolate, n_dropped));
 }
 
-void CollectionWrapper::dropOlderThan(const FunctionCallbackInfo<Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
-
-    auto n_dropped = obj->collection->dropOlderThan(args[0].As<Number>()->Value());
-    args.GetReturnValue().Set(v8::Number::New(isolate, n_dropped));
-}
-
-void CollectionWrapper::timestampById(const FunctionCallbackInfo<Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    v8::String::Utf8Value findstr(isolate, args[0]);
-
-    CollectionWrapper* obj = ObjectWrap::Unwrap<CollectionWrapper>(args.Holder());
-
-    uint64_t ts = obj->collection->timestampById(*findstr);
-    args.GetReturnValue().Set(v8::Date::New(isolate->GetCurrentContext(), ts).ToLocalChecked());
-}
-
-
-
 SpinoWrapper::SpinoWrapper() {
-    spino = new Spino::SpinoDB();	
+    spino = new Spino::Database();	
 }
 
 void SpinoWrapper::Init(Local<Object> exports) {
@@ -447,7 +365,6 @@ void SpinoWrapper::Init(Local<Object> exports) {
     NODE_SET_PROTOTYPE_METHOD(tpl, "disableJournal", disableJournal);
     NODE_SET_PROTOTYPE_METHOD(tpl, "consolidate", consolidate);
 
-    NODE_SET_PROTOTYPE_METHOD(tpl, "addCollection", addCollection);
     NODE_SET_PROTOTYPE_METHOD(tpl, "getCollection", getCollection);
     NODE_SET_PROTOTYPE_METHOD(tpl, "dropCollection", dropCollection);
 
@@ -557,12 +474,12 @@ void SpinoWrapper::enableJournal(const FunctionCallbackInfo<Value>& args) {
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    obj->spino->enableJournal(*str);
+    obj->spino->enable_journal(*str);
 }
 
 void SpinoWrapper::disableJournal(const FunctionCallbackInfo<Value>& args) {
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-    obj->spino->disableJournal();
+    obj->spino->disable_journal();
 }
 
 void SpinoWrapper::consolidate(const FunctionCallbackInfo<Value>& args) {
@@ -574,23 +491,13 @@ void SpinoWrapper::consolidate(const FunctionCallbackInfo<Value>& args) {
     obj->spino->consolidate(*str);
 }
 
-void SpinoWrapper::addCollection(const FunctionCallbackInfo<Value>& args) {
-    Isolate* isolate = args.GetIsolate();
-    v8::String::Utf8Value str(isolate, args[0]);
-
-    SpinoWrapper* spinowrap = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-
-    auto col = spinowrap->spino->addCollection(*str);
-    CollectionWrapper::NewInstance(args, col);
-}
-
 void SpinoWrapper::getCollection(const FunctionCallbackInfo<Value>& args) {
     Isolate* isolate = args.GetIsolate();
     v8::String::Utf8Value str(isolate, args[0]);
 
     SpinoWrapper* spinowrap = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    auto col = spinowrap->spino->getCollection(*str);
+    auto col = spinowrap->spino->get_collection(*str);
     if(col == nullptr) {
         isolate->ThrowException(Exception::TypeError(
                     String::NewFromUtf8(isolate,
@@ -609,7 +516,7 @@ void SpinoWrapper::dropCollection(const FunctionCallbackInfo<Value>& args) {
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    obj->spino->dropCollection(*str);
+    obj->spino->drop_collection(*str);
 }
 
 void SpinoWrapper::setBoolValue(const FunctionCallbackInfo<Value>& args) {
@@ -618,7 +525,7 @@ void SpinoWrapper::setBoolValue(const FunctionCallbackInfo<Value>& args) {
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    obj->spino->setBoolValue(*key, args[1].As<v8::Boolean>()->Value());
+    obj->spino->set_bool_value(*key, args[1].As<v8::Boolean>()->Value());
 }
 
 void SpinoWrapper::setIntValue(const FunctionCallbackInfo<Value>& args) {
@@ -627,7 +534,7 @@ void SpinoWrapper::setIntValue(const FunctionCallbackInfo<Value>& args) {
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    obj->spino->setIntValue(*key, args[1].As<Number>()->Value());
+    obj->spino->set_int_value(*key, args[1].As<Number>()->Value());
 }
 
 void SpinoWrapper::setUintValue(const FunctionCallbackInfo<Value>& args) {
@@ -636,7 +543,7 @@ void SpinoWrapper::setUintValue(const FunctionCallbackInfo<Value>& args) {
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    obj->spino->setUintValue(*key, args[1].As<Number>()->Value());
+    obj->spino->set_uint_value(*key, args[1].As<Number>()->Value());
 }
 
 void SpinoWrapper::setDoubleValue(const FunctionCallbackInfo<Value>& args) {
@@ -645,7 +552,7 @@ void SpinoWrapper::setDoubleValue(const FunctionCallbackInfo<Value>& args) {
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    obj->spino->setDoubleValue(*key, args[1].As<Number>()->Value());
+    obj->spino->set_double_value(*key, args[1].As<Number>()->Value());
 }
 
 void SpinoWrapper::setStringValue(const FunctionCallbackInfo<Value>& args) {
@@ -655,7 +562,7 @@ void SpinoWrapper::setStringValue(const FunctionCallbackInfo<Value>& args) {
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
 
-    obj->spino->setStringValue(*key, *value);
+    obj->spino->set_string_value(*key, *value);
 }
 
 void SpinoWrapper::getBoolValue(const FunctionCallbackInfo<Value>& args) {
@@ -663,7 +570,7 @@ void SpinoWrapper::getBoolValue(const FunctionCallbackInfo<Value>& args) {
     v8::String::Utf8Value key(isolate, args[0]);
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-    bool v = obj->spino->getBoolValue(*key);
+    bool v = obj->spino->get_bool_value(*key);
     args.GetReturnValue().Set(v8::Boolean::New(isolate, v));
 }
 
@@ -672,7 +579,7 @@ void SpinoWrapper::getIntValue(const FunctionCallbackInfo<Value>& args) {
     v8::String::Utf8Value key(isolate, args[0]);
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-    int v = obj->spino->getIntValue(*key);
+    int v = obj->spino->get_int_value(*key);
     args.GetReturnValue().Set(v8::Number::New(isolate, v));
 }
 
@@ -681,7 +588,7 @@ void SpinoWrapper::getUintValue(const FunctionCallbackInfo<Value>& args) {
     v8::String::Utf8Value key(isolate, args[0]);
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-    unsigned int v = obj->spino->getUintValue(*key);
+    unsigned int v = obj->spino->get_uint_value(*key);
     args.GetReturnValue().Set(v8::Number::New(isolate, v));
 }
 
@@ -690,7 +597,7 @@ void SpinoWrapper::getDoubleValue(const FunctionCallbackInfo<Value>& args) {
     v8::String::Utf8Value key(isolate, args[0]);
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-    double v = obj->spino->getDoubleValue(*key);
+    double v = obj->spino->get_double_value(*key);
     args.GetReturnValue().Set(v8::Number::New(isolate, v));
 }
 
@@ -699,7 +606,7 @@ void SpinoWrapper::getStringValue(const FunctionCallbackInfo<Value>& args) {
     v8::String::Utf8Value key(isolate, args[0]);
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-    const char* v = obj->spino->getStringValue(*key);
+    const char* v = obj->spino->get_string_value(*key);
     args.GetReturnValue().Set(String::NewFromUtf8(isolate, v).ToLocalChecked());
     delete v;
 }
@@ -709,7 +616,7 @@ void SpinoWrapper::hasKey(const FunctionCallbackInfo<Value>& args) {
     v8::String::Utf8Value key(isolate, args[0]);
 
     SpinoWrapper* obj = ObjectWrap::Unwrap<SpinoWrapper>(args.Holder());
-    bool v = obj->spino->hasKey(*key);
+    bool v = obj->spino->has_key(*key);
     args.GetReturnValue().Set(v8::Boolean::New(isolate, v));
 }
 

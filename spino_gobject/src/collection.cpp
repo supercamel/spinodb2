@@ -26,7 +26,7 @@ static void spino_collection_init(SpinoCollection* self)
 
 gchar* spino_collection_get_name(SpinoCollection* self)
 {
-    return g_strdup(self->priv->get_name());
+    return g_strdup(self->priv->get_name().c_str());
 }
 
 
@@ -51,15 +51,15 @@ void spino_collection_upsert(
     self->priv->upsert(query, doc);
 }
 
-gchar* spino_collection_find_one(SpinoCollection* self, const gchar* query)
+const gchar* spino_collection_find_one(SpinoCollection* self, const gchar* query)
 {
-    return g_strdup(self->priv->find_one(query)->stringify().c_str());
+    return g_strdup(self->priv->find_one(query));
 }
 
 SpinoCursor* spino_collection_find(
         SpinoCollection* self, const gchar* query)
 {
-    std::unique_ptr<Spino::Cursor> cursor = self->priv->find(query);
+    auto cursor = self->priv->find(query);
     return spino_cursor_new(cursor);
 }
 

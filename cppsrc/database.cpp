@@ -1,37 +1,45 @@
 #include "database.h"
+#include <memory>
 
 namespace Spino
 {
     Database::Database()
     {
-        kvstore = make_unique<Collection>("__SpinoKeyValueStore__", jw);
+        kvstore = new Collection("__SpinoKeyValueStore__", jw);
         kvstore->create_index("k");
     }
 
-    Collection &Database::get_collection(const char *name)
+    Database::~Database() {
+        for(auto& col : collections) {
+            delete col;
+        }
+        delete kvstore;
+    }
+
+    Collection* Database::get_collection(const std::string &name)
     {
-        if(std::string(name) == std::string("__SpinoKeyValueStore__"))
+        if (std::string(name) == std::string("__SpinoKeyValueStore__"))
         {
-            return *kvstore;
+            return kvstore;
         }
 
-        for (auto &col : collections)
+        for (auto col : collections)
         {
             if (std::string(col->get_name()) == name)
             {
-                return *col;
+                return col;
             }
         }
 
-        collections.push_back(make_unique<Collection>(name, jw));
-        return *collections.back();
+        collections.push_back(new Collection(name, jw));
+        return collections.back();
     }
 
-    bool Database::has_collection(const char *name)
+    bool Database::has_collection(const std::string &name) const
     {
-        for (auto &col : collections)
+        for (auto col : collections)
         {
-            if (std::string(col->get_name()) == name)
+            if (col->get_name() == name)
             {
                 return true;
             }
@@ -40,13 +48,14 @@ namespace Spino
         return false;
     }
 
-    void Database::drop_collection(const char *name)
+    void Database::drop_collection(const std::string &name)
     {
         for (auto iter = collections.begin(); iter != collections.end(); iter++)
         {
             if (std::string((*iter)->get_name()) == name)
             {
                 collections.erase(iter);
+                delete *iter;
                 return;
             }
         }
@@ -61,174 +70,175 @@ namespace Spino
         }
     }
 
-    void Database::set_bool_value(const char *key, bool value)
+    void Database::set_bool_value(const std::string &key, bool value)
     {
-        DomNode doc(kvstore->get_allocator());
-        doc.set_object();
+        DomNode *doc = dom_node_allocator.make();
+        doc->set_object();
 
-        DomNode *keyval = doc.push_in_place();
-        keyval->set_key("k", (size_t)1);
-        keyval->set_string(key, strlen(key));
+        DomNode *val = dom_node_allocator.make();
+        val->set_bool(value);
 
-        DomNode *valval = doc.push_in_place();
-        valval->set_key("v", (size_t)1);
-        valval->set_bool(value);
+        DomNode* k = dom_node_allocator.make();
+        k->set_string(key.c_str(), key.length(), true);
+
+        doc->add_member("v", val);
+        doc->add_member("k", k);
 
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        kvstore->upsert(query.c_str(), &doc);
+        kvstore->upsert(query, doc);
     }
 
-    bool Database::get_bool_value(const char *key)
+    bool Database::get_bool_value(const std::string &key) const
     {
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        const DomNode *result = kvstore->find_one(query.c_str());
+        DomView *result = kvstore->find_one_dom(query.c_str());
         if (result)
         {
-            return result->get_member("v", 1)->get_bool();
+            return result->get_member("v").get_bool();
         }
         return false;
     }
 
-    void Database::set_int_value(const char *key, int value)
+    void Database::set_int_value(const std::string &key, int value)
     {
-        DomNode doc(kvstore->get_allocator());
-        doc.set_object();
+        DomNode *doc = dom_node_allocator.make();
+        doc->set_object();
 
-        DomNode *keyval = doc.push_in_place();
-        keyval->set_key("k", (size_t)1);
-        keyval->set_string(key, strlen(key));
+        DomNode *val = dom_node_allocator.make();
+        val->set_int(value);
+        doc->add_member("v", val);
 
-        DomNode *valval = doc.push_in_place();
-        valval->set_key("v", (size_t)1);
-        valval->set_int(value);
+        DomNode* k = dom_node_allocator.make();
+        k->set_string(key.c_str(), key.length(), true);
+        doc->add_member("k", k);
 
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        kvstore->upsert(query.c_str(), &doc);
+        kvstore->upsert(query.c_str(), doc);
     }
 
-    int Database::get_int_value(const char *key)
+    int Database::get_int_value(const std::string &key) const
     {
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        const DomNode *result = kvstore->find_one(query.c_str());
+        DomView *result = kvstore->find_one_dom(query);
         if (result)
         {
-            cout << "start" << endl;
-            cout << "as string:" << result->stringify() << endl;
-            return result->get_member("v", 1)->get_int();
+            return result->get_member("v").get_int();
         }
         return -1;
     }
 
-    void Database::set_uint_value(const char *key, unsigned int value)
+    void Database::set_uint_value(const std::string &key, unsigned int value)
     {
-        DomNode doc(kvstore->get_allocator());
-        doc.set_object();
+        DomNode *doc = dom_node_allocator.make();
+        doc->set_object();
 
-        DomNode *keyval = doc.push_in_place();
-        keyval->set_key("k", (size_t)1);
-        keyval->set_string(key, strlen(key));
+        DomNode *val = dom_node_allocator.make();
+        val->set_uint(value);
+        doc->add_member("v", val);
 
-        DomNode *valval = doc.push_in_place();
-        valval->set_key("v", (size_t)1);
-        valval->set_uint(value);
+        DomNode* k = dom_node_allocator.make();
+        k->set_string(key.c_str(), key.length(), true);
+        doc->add_member("k", k);
 
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        kvstore->upsert(query.c_str(), &doc);
+        kvstore->upsert(query, doc);
     }
 
-    unsigned int Database::get_uint_value(const char *key)
+    unsigned int Database::get_uint_value(const std::string &key) const
     {
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        const DomNode *result = kvstore->find_one(query.c_str());
+        DomView *result = kvstore->find_one_dom(query);
         if (result)
         {
-            return result->get_member("v", 1)->get_uint();
+            return result->get_member("v").get_uint();
         }
         return -1;
     }
 
-    void Database::set_double_value(const char *key, double value)
+    void Database::set_double_value(const std::string &key, double value)
     {
-        DomNode doc(kvstore->get_allocator());
-        doc.set_object();
+        DomNode *doc = dom_node_allocator.make();
+        doc->set_object();
 
-        DomNode *keyval = doc.push_in_place();
-        keyval->set_key("k", (size_t)1);
-        keyval->set_string(key, strlen(key));
+        DomNode *val = dom_node_allocator.make();
+        val->set_double(value);
+        doc->add_member("v", val);
 
-        DomNode *valval = doc.push_in_place();
-        valval->set_key("v", (size_t)1);
-        valval->set_double(value);
+        DomNode* k = dom_node_allocator.make();
+        k->set_string(key.c_str(), key.length(), true);
+        doc->add_member("k", k);
 
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        kvstore->upsert(query.c_str(), &doc);
+        kvstore->upsert(query, doc);
     }
 
-    double Database::get_double_value(const char *key)
+    double Database::get_double_value(const std::string &key) const
     {
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        const DomNode *result = kvstore->find_one(query.c_str());
+        DomView *result = kvstore->find_one_dom(query);
         if (result)
         {
-            return result->get_member("v", 1)->get_double();
+            return result->get_member("v").get_double();
         }
         return 0.0;
     }
 
-    void Database::set_string_value(const char *key, const char *value)
+    void Database::set_string_value(const std::string &key, const std::string &value)
     {
-        DomNode doc(kvstore->get_allocator());
-        doc.set_object();
+        DomNode *doc = dom_node_allocator.make();
+        doc->set_object();
 
-        DomNode *keyval = doc.push_in_place();
-        keyval->set_key("k", (size_t)1);
-        keyval->set_string(key, strlen(key));
+        DomNode *val = dom_node_allocator.make();
+        val->set_string(value.c_str(), value.length(), true);
+        doc->add_member("k", val);
 
-        DomNode *valval = doc.push_in_place();
-        valval->set_key("v", (size_t)1);
-        valval->set_string(value, strlen(value));
+        DomNode* k = dom_node_allocator.make();
+        k->set_string(key.c_str(), key.length(), true);
+        doc->add_member("v", k);
+
 
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        kvstore->upsert(query.c_str(), &doc);
+        kvstore->upsert(query, doc);
     }
 
-    const char *Database::get_string_value(const char *key)
+    const char* Database::get_string_value(const std::string &key) const
     {
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        const DomNode *result = kvstore->find_one(query.c_str());
+        const DomView *result = kvstore->find_one_dom(query);
         if (result)
         {
-            return result->get_member("v", 1)->get_string();
+            return result->get_member("v").get_string();
         }
-        return nullptr;
+        
+        return "";
     }
 
-    bool Database::has_key(const char* key)
+    bool Database::has_key(const std::string &key) const
     {
         std::string query = "{k:\"";
         query += key;
         query += "\"}";
-        const DomNode *result = kvstore->find_one(query.c_str());
+        const DomView *result = kvstore->find_one_dom(query);
         if (result)
         {
             return true;
@@ -236,9 +246,9 @@ namespace Spino
         return false;
     }
 
-    FILE_ERROR Database::save(std::string path)
+    FILE_ERROR Database::save(const std::string &path) const
     {
-        std::string tmppath = path + "spinotmp";
+        std::string tmppath = path;
         ofstream out(tmppath, ios::out | ios::binary);
         if (!out)
         {
@@ -246,35 +256,21 @@ namespace Spino
         }
 
         out.put(DOM_NODE_TYPE_ARRAY);
-        out.write(kvstore->get_name(), strlen(kvstore->get_name()) + 1);
-        auto cursor = kvstore->find("{}");
-        while (cursor->has_next())
-        {
-            out.put(DOM_NODE_TYPE_OBJECT);
-            cursor->next_dom()->to_not_bson(out);
-        }
+        const std::string &keystore_name = kvstore->get_name();
+        out.write(keystore_name.c_str(), keystore_name.length() + 1);
+        kvstore->to_not_bson(out);
         out.put(0x00);
 
         for (auto &col : collections)
         {
             out.put(DOM_NODE_TYPE_ARRAY);
-            out.write(col->get_name(), strlen(col->get_name()) + 1);
-            auto cursor = col->find("{}");
-
-            while (cursor->has_next())
-            {
-                out.put(DOM_NODE_TYPE_OBJECT);
-                cursor->next_dom()->to_not_bson(out);
-            }
+            const std::string col_name = col->get_name();
+            out.write(col_name.c_str(), col_name.length() + 1);
+            col->to_not_bson(out);
             out.put(0x00);
         }
         out.flush();
         out.close();
-
-        // move the temporary file to the correct location
-        std::remove(path.c_str());                  // remove original db file
-        std::rename(tmppath.c_str(), path.c_str()); // move tmp file to actual location
-        std::remove(tmppath.c_str());               // remove tmp file
 
         // clear the journal
         if (jw.get_enabled())
@@ -287,7 +283,7 @@ namespace Spino
         return FILE_ERROR_NONE;
     }
 
-    FILE_ERROR Database::load(std::string path)
+    FILE_ERROR Database::load(const std::string &path)
     {
         ifstream ifile(path, ios::in | ios::binary);
         if (!ifile)
@@ -295,8 +291,15 @@ namespace Spino
             return FILE_ERROR_PARSE_ERROR;
         }
 
-        kvstore = make_unique<Collection>("__SpinoKeyValueStore__", jw);
+        delete kvstore;
+        kvstore = new Collection("__SpinoKeyValueStore__", jw);
+
+        for(auto &col : collections)
+        {
+            delete col;
+        }
         collections.erase(collections.begin(), collections.end());
+
 
         while (ifile.get() == DOM_NODE_TYPE_ARRAY)
         {
@@ -311,28 +314,28 @@ namespace Spino
             {
                 while (ifile.get() == DOM_NODE_TYPE_OBJECT)
                 {
-                    DomNode doc(kvstore->get_allocator());
-                    doc.set_object();
-                    doc.from_not_bson(ifile);
-                    kvstore->append(&doc);
+                    DomNode *doc = dom_node_allocator.make();
+                    doc->set_object();
+                    doc->from_not_bson(ifile, DOM_NODE_TYPE_OBJECT);
+                    kvstore->append(doc);
                 }
             }
             else
             {
-                auto &col = get_collection(col_name.c_str());
+                auto col = get_collection(col_name.c_str());
                 while (ifile.get() == DOM_NODE_TYPE_OBJECT)
                 {
-                    DomNode doc(col.get_allocator());
-                    doc.set_object();
-                    doc.from_not_bson(ifile);
-                    col.append(&doc);
+                    DomNode *doc = dom_node_allocator.make();
+                    doc->set_object();
+                    doc->from_not_bson(ifile, DOM_NODE_TYPE_OBJECT);
+                    col->append(doc);
                 }
             }
         }
         return FILE_ERROR_NONE;
     }
 
-    void Database::save_not_bson_collection(std::string col_name, std::string path)
+    void Database::save_not_bson_collection(const std::string &col_name, const std::string &path) const
     {
         for (auto &col : collections)
         {
@@ -351,7 +354,7 @@ namespace Spino
         }
     }
 
-    void Database::save_not_bson_keystore(std::string path)
+    void Database::save_not_bson_keystore(const std::string &path) const
     {
         ofstream out(path, ios::out | ios::binary);
 
@@ -364,22 +367,22 @@ namespace Spino
         out.put(0x00);
     }
 
-    void Database::load_not_bson_collection(std::string col_name, std::string path)
+    void Database::load_not_bson_collection(const std::string &col_name, const std::string &path)
     {
-        auto &col = get_collection(col_name.c_str());
+        auto col = get_collection(col_name);
 
         ifstream ifile(path, ios::in | ios::binary);
 
         while (ifile.get() == DOM_NODE_TYPE_OBJECT)
         {
-            DomNode doc(col.get_allocator());
-            doc.set_object();
-            doc.from_not_bson(ifile);
-            col.append(&doc);
+            DomNode *doc = dom_node_allocator.make();
+            doc->set_object();
+            doc->from_not_bson(ifile, DOM_NODE_TYPE_OBJECT);
+            col->append(doc);
         }
     }
 
-    void Database::save_json(const char *path)
+    void Database::save_json(const std::string &path) const
     {
         ofstream ofile;
         ofile.open(path);
@@ -406,7 +409,7 @@ namespace Spino
         ofile.close();
     }
 
-    void Database::enable_journal(std::string jpath)
+    void Database::enable_journal(const std::string &jpath)
     {
         jw.set_enabled(true);
         jw.set_path(jpath);
@@ -417,7 +420,7 @@ namespace Spino
         jw.set_enabled(false);
     }
 
-    void Database::consolidate(std::string path)
+    void Database::consolidate(const std::string &path)
     {
         bool priorState = jw.get_enabled();
         jw.set_enabled(false);
@@ -441,38 +444,46 @@ namespace Spino
         save(path);
     }
 
-    std::string Database::execute(std::string json)
+    std::string Database::execute(const std::string &json)
     {
-        DomAllocator alloc(1, 100);
-
-        Parser parser(alloc);
-        DomNode* doc = parser.parse(json.c_str());
+        Parser parser;
+        DomNode *doc = parser.parse(json);
+        std::string result;
+        if (doc == nullptr)
+        {
+            return "Error: Invalid JSON";
+        }
 
         if (!doc->has_member("cmd"))
         {
-            return "{\"error\":\"Missing cmd field\"}";
+            result = "{\"error\":\"Missing cmd field\"}";
+            dom_node_allocator.delete_object(doc);
+            return result;
         }
 
-        if (doc->get_member("cmd")->get_type() != DOM_NODE_TYPE_STRING)
+        if (!doc->get_member("cmd").is_string())
         {
-            return "{\"error\":\"cmd field must be of type string\"}";
+            result = "{\"error\":\"cmd field must be of type string\"}";
+            dom_node_allocator.delete_object(doc);
+            return result;
         }
 
-        std::string cmd = doc->get_member("cmd")->get_string();
+        std::string cmd = doc->get_member("cmd").get_string();
         if (cmd == "count")
         {
             if (doc->has_member("collection"))
             {
                 std::stringstream ss;
                 ss << "{\"r\":1,\"count\":" << collections.size() << "}";
-                return ss.str();
+                result = ss.str();
             }
             else
             {
-                auto &col = get_collection(doc->get_member("collection")->get_string());
+                auto col = get_collection(doc->get_member("collection").get_string());
                 std::stringstream ss;
-                ss << "{\"r\":1,\"count\":" << col.size() << "}";
-                return ss.str();
+                ss << "{\"r\":1,\"count\":" << col->size() << "}";
+
+                result = ss.str();
             }
         }
 
@@ -480,12 +491,12 @@ namespace Spino
         {
             if (doc->has_member("collection"))
             {
-                drop_collection(doc->get_member("collection")->get_string());
-                return "{\"msg\":\"OK\"}";
+                drop_collection(doc->get_member("collection").get_string());
+                result = "{\"msg\":\"OK\"}";
             }
             else
             {
-                return "{\"error\":\"dropCollection command is missing a collection name\"}";
+                result = "{\"error\":\"dropCollection command is missing a collection name\"}";
             }
         }
 
@@ -493,20 +504,21 @@ namespace Spino
         {
             if (doc->has_member("collection") && (doc->has_member("field")))
             {
-                DomNode *colnode = doc->get_member("collection");
-                DomNode *fieldnode = doc->get_member("field");
-                if ((colnode->get_type() != DOM_NODE_TYPE_STRING) || (fieldnode->get_type() != DOM_NODE_TYPE_STRING))
+                DomView colnode = doc->get_member("collection");
+                DomView fieldnode = doc->get_member("field");
+                if ((!colnode.is_string()) || (!fieldnode.is_string()))
                 {
-                    return "{\"error\":\"both collection and field must be of type string\"}";
+                    result = "{\"error\":\"both collection and field must be of type string\"}";
+                    goto cleanup;
                 }
 
-                auto &col = get_collection(colnode->get_string());
-                col.create_index(fieldnode->get_string());
-                return "{\"msg\":\"OK\"}";
+                auto col = get_collection(colnode.get_string());
+                col->create_index(fieldnode.get_string());
+                result = "{\"msg\":\"OK\"}";
             }
             else
             {
-                return "{\"error\":\"Missing collection or 'field' field in createIndex command\"}";
+                result = "{\"error\":\"Missing collection or 'field' field in createIndex command\"}";
             }
         }
 
@@ -514,20 +526,21 @@ namespace Spino
         {
             if (doc->has_member("collection") && (doc->has_member("field")))
             {
-                DomNode *colnode = doc->get_member("collection");
-                DomNode *fieldnode = doc->get_member("field");
-                if ((colnode->get_type() != DOM_NODE_TYPE_STRING) || (fieldnode->get_type() != DOM_NODE_TYPE_STRING))
+                DomView colnode = doc->get_member("collection");
+                DomView fieldnode = doc->get_member("field");
+                if ((!colnode.is_string()) || (!fieldnode.is_string()))
                 {
-                    return "{\"error\":\"both collection and field must be of type string\"}";
+                    result = "{\"error\":\"both collection and field must be of type string\"}";
+                    goto cleanup;
                 }
 
-                auto &col = get_collection(colnode->get_string());
-                col.drop_index(fieldnode->get_string());
-                return "{\"msg\":\"OK\"}";
+                auto col = get_collection(colnode.get_string());
+                col->drop_index(fieldnode.get_string());
+                result = "{\"msg\":\"OK\"}";
             }
             else
             {
-                return "{\"error\":\"Missing collection or 'field' field in createIndex command\"}";
+                result = "{\"error\":\"Missing collection or 'field' field in createIndex command\"}";
             }
         }
 
@@ -535,180 +548,198 @@ namespace Spino
         {
             if (doc->has_member("collection") && doc->has_member("query"))
             {
-                DomNode *colnode = doc->get_member("collection");
-                DomNode *querynode = doc->get_member("query");
-                if ((colnode->get_type() != DOM_NODE_TYPE_STRING) || (querynode->get_type() != DOM_NODE_TYPE_STRING))
+                DomView colnode = doc->get_member("collection");
+                DomView querynode = doc->get_member("query");
+                if ((!colnode.is_string()) || (!querynode.is_string()))
                 {
-                    return "{\"error\":\"both collection and query must be of type string\"}";
+                    result = "{\"error\":\"both collection and query must be of type string\"}";
+                    goto cleanup;
                 }
 
-                auto &col = get_collection(colnode->get_string());
-                const DomNode *result = col.find_one(querynode->get_string());
-                if (result)
-                {
-                    return result->stringify();
-                }
-                else
-                {
-                    return "{}";
-                }
+                auto col = get_collection(colnode.get_string());
+                return col->find_one(querynode.get_string());
             }
             else
             {
-                return "{\"error\":\"Collection and query fields are required\"}";
+                result = "{\"error\":\"Collection and query fields are required\"}";
             }
         }
 
         if (cmd == "find")
         {
-            DomNode *colnode = doc->get_member("collection");
-            DomNode *querynode = doc->get_member("query");
-            if ((colnode->get_type() != DOM_NODE_TYPE_STRING) || (querynode->get_type() != DOM_NODE_TYPE_STRING))
+            if (doc->has_member("collection") && doc->has_member("query"))
             {
-                return "{\"error\":\"both collection and query must be of type string\"}";
-            }
-
-            size_t limit = 20;
-            DomNode *limitnode = doc->get_member("limit");
-            if (limitnode)
-            {
-                if (limitnode->get_type() == DOM_NODE_TYPE_UINT)
+                DomView colnode = doc->get_member("collection");
+                DomView querynode = doc->get_member("query");
+                if ((!colnode.is_string()) || (!querynode.is_string()))
                 {
-                    limit = limitnode->get_uint();
+                    result = "{\"error\":\"both collection and query must be of type string\"}";
+                    goto cleanup;
                 }
-            }
 
-            auto &col = get_collection(colnode->get_string());
-            auto cursor = col.find(querynode->get_string())->set_limit(limit);
-            string result = "{";
-            while (cursor->has_next())
-            {
-                result += cursor->next();
-                if (cursor->has_next())
+                size_t limit = 20;
+                if (doc->has_member("limit"))
                 {
-                    result += ",";
+                    DomView limitnode = doc->get_member("limit");
+                    if (limitnode.get_type() == DOM_NODE_TYPE_UINT)
+                    {
+                        limit = limitnode.get_uint();
+                    }
                 }
+
+                auto col = get_collection(colnode.get_string());
+                auto cursor = col->find(querynode.get_string());
+                cursor->set_limit(limit);
+                string r = "[";
+                while (cursor->has_next())
+                {
+                    r += cursor->next();
+                    if (cursor->has_next())
+                    {
+                        r += ",";
+                    }
+                }
+                r += "]";
+                result = r;
             }
-            result += "}";
-            return result;
+            else
+            {
+                result = "{\"error\":\"Collection and query fields are required\"}";
+            }
         }
 
         if (cmd == "append")
         {
-            DomNode *colnode = doc->get_member("collection");
-            DomNode *docnode = doc->get_member("document");
-            if (!colnode || !docnode)
+            if (doc->has_member("collection") && doc->has_member("document"))
             {
-                return "{\"error\":\"append command requires a collection and document field of type string\"}";
-            }
-            if ((colnode->get_type() != DOM_NODE_TYPE_STRING) || (docnode->get_type() != DOM_NODE_TYPE_STRING))
-            {
-                return "{\"error\":\"both collection and document must be of type string\"}";
-            }
+                DomView colnode = doc->get_member("collection");
+                DomView docnode = doc->get_member("document");
+                if ((!colnode.is_string()) || (!docnode.is_string()))
+                {
+                    result = "{\"error\":\"both collection and document must be of type string\"}";
+                    goto cleanup;
+                }
 
-            auto &col = get_collection(colnode->get_string());
-            if (col.append(docnode->get_string()))
-            {
-                return "{\"msg\":\"OK\"}";
+                auto col = get_collection(colnode.get_string());
+                if (col->append(docnode.get_string()))
+                {
+                    result = "{\"msg\":\"OK\"}";
+                }
+                else
+                {
+                    result = "{\"error\":\"parse error\"}";
+                }
             }
             else
             {
-                return "{\"error\":\"parse error\"}";
+                result = "{\"error\":\"Collection and document fields are required\"}";
             }
         }
 
         if (cmd == "upsert")
         {
-            DomNode *colnode = doc->get_member("collection");
-            DomNode *querynode = doc->get_member("query");
-            DomNode *docnode = doc->get_member("document");
-            if (!colnode || !querynode || !docnode)
+            if (doc->has_member("collection") && doc->has_member("query") && doc->has_member("document"))
             {
-                return "{\"error\":\"update command requires a collection, query and document field\"}";
-            }
-            if ((colnode->get_type() != DOM_NODE_TYPE_STRING) || (querynode->get_type() != DOM_NODE_TYPE_STRING) || (docnode->get_type() != DOM_NODE_TYPE_STRING))
-            {
-                return "{\"error\":\"both collection and document must be of type string\"}";
-            }
+                DomView colnode = doc->get_member("collection");
+                DomView querynode = doc->get_member("query");
+                DomView docnode = doc->get_member("document");
+                if ((!colnode.is_string()) || (!querynode.is_string()) || (!docnode.is_string()))
+                {
+                    result = "{\"error\":\"both collection and document must be of type string\"}";
+                    goto cleanup;
+                }
 
-            auto &col = get_collection(colnode->get_string());
-            col.upsert(querynode->get_string(), docnode->get_string());
-            return "{\"msg\":\"OK\"}";
+                auto col = get_collection(colnode.get_string());
+                col->upsert(querynode.get_string(), docnode.get_string());
+                result = "{\"msg\":\"OK\"}";
+            }
+            else
+            {
+                result = "{\"error\":\"Collection, query and document fields are required\"}";
+            }
         }
 
         if (cmd == "drop")
         {
-            DomNode *colnode = doc->get_member("collection");
-            DomNode *querynode = doc->get_member("query");
-            DomNode *limitnode = doc->get_member("limit");
-            if (!colnode || !querynode || !limitnode)
+            if (doc->has_member("collection") && doc->has_member("query") && doc->has_member("limit"))
             {
-                return "{\"error\":\"update command requires a collection, query and document field\"}";
-            }
-            if ((colnode->get_type() != DOM_NODE_TYPE_STRING) || (querynode->get_type() != DOM_NODE_TYPE_STRING) || (limitnode->get_type() != DOM_NODE_TYPE_UINT))
-            {
-                return "{\"error\":\"collection and document must be of type string. limit must be an unsigned integer.\"}";
-            }
+                DomView colnode = doc->get_member("collection");
+                DomView querynode = doc->get_member("query");
+                DomView limitnode = doc->get_member("limit");
 
-            auto &col = get_collection(colnode->get_string());
-            col.drop(querynode->get_string(), limitnode->get_uint());
-            return "{\"msg\":\"OK\"}";
+                if ((!colnode.is_string()) || (!querynode.is_string()) || (!limitnode.is_string()))
+                {
+                    result = "{\"error\":\"collection and document must be of type string. limit must be an unsigned integer.\"}";
+                    goto cleanup;
+                }
+
+                auto col = get_collection(colnode.get_string());
+                col->drop(querynode.get_string(), limitnode.get_uint());
+                result = "{\"msg\":\"OK\"}";
+            }
+            else
+            {
+                result = "{\"error\":\"Collection, query and limit fields are required\"}";
+            }
         }
 
         if (cmd == "getValue")
         {
-            DomNode *keynode = doc->get_member("key");
-            if (!keynode)
+            if (doc->has_member("key"))
             {
-                return "{\"error\":\"key field is required\"}";
-            }
+                DomView keynode = doc->get_member("key");
 
-            if (keynode->get_type() != DOM_NODE_TYPE_STRING)
-            {
-                return "{\"error\":\"key field must be a string\"}";
-            }
+                if (!keynode.is_string())
+                {
+                    result = "{\"error\":\"key field must be a string\"}";
+                    goto cleanup;
+                }
 
-            std::string query = "{k:\"";
-            query += keynode->get_string();
-            query += "\"}";
-            const DomNode *result = kvstore->find_one(query.c_str());
-            if (result)
-            {
-                return result->stringify();
+                std::string query = "{k:\"";
+                query += keynode.get_string();
+                query += "\"}";
+                result = kvstore->find_one(query.c_str());
             }
             else
             {
-                return "{}";
+                result = "{\"error\":\"key field is required\"}";
             }
         }
 
         if (cmd == "setValue")
         {
-            DomNode *keynode = doc->get_member("key");
-            DomNode *valuenode = doc->get_member("value");
-            if (!keynode || !valuenode)
+            if (doc->has_member("key") && doc->has_member("value"))
             {
-                return "{\"error\":\"missing key or value fields\"}";
+                DomView keynode = doc->get_member("key");
+                DomView valuenode = doc->get_member("value");
+
+                DomNode *newdoc = dom_node_allocator.make();
+                newdoc->set_object();
+
+                DomNode *value = dom_node_allocator.make();
+                value->copy(&valuenode);
+                newdoc->add_member("v", value);
+
+                DomNode *key = dom_node_allocator.make();
+                key->copy(&keynode);
+                newdoc->add_member("k", key);
+
+                kvstore->append(newdoc);
+                result = "{\"msg\":\"OK\"}";
             }
-
-            DomNode doc(kvstore->get_allocator());
-            doc.set_object();
-            DomNode *key = doc.push_in_place();
-            key->set_string(keynode->get_string());
-            key->set_key("k");
-
-            DomNode *value = doc.push_in_place();
-            value->copy(valuenode);
-            value->set_key("v");
-
-            kvstore->append(keynode);
-            return "{\"msg\":\"OK\"}";
+            else
+            {
+                result = "{\"error\":\"key and value fields are required\"}";
+            }
         }
 
-        return "{\"error\":\"Invalid command\"}";
+        result = "{\"error\":\"unknown command\"}";
+        cleanup:
+            dom_node_allocator.free(doc);
+            return result;
     }
 
-    void Database::save_json_collection(ofstream &ofile, unique_ptr<Collection> &col)
+    void Database::save_json_collection(ofstream &ofile, Collection* col) const
     {
         ofile << "\"" << col->get_name() << "\":[";
         auto cursor = col->find("{}");
@@ -722,7 +753,4 @@ namespace Spino
         }
         ofile << "]";
     }
-
-
 }
-

@@ -37,15 +37,14 @@ static void spino_database_init(SpinoDatabase* self)
 gchar* spino_database_execute(SpinoDatabase* self, const gchar* command)
 {
     std::string result = self->db->execute(command);
-    cout << "result: " << result << endl;
     return g_strdup(result.c_str());
 }
 
 
 SpinoCollection* spino_database_get_collection(SpinoDatabase* self, const gchar* name)
 {
-    auto& col = self->db->get_collection(name);
-    return spino_collection_new(&col);
+    auto col = self->db->get_collection(name);
+    return spino_collection_new(col);
 }
 
 
@@ -132,7 +131,7 @@ double spino_database_get_double_value(SpinoDatabase* self, const gchar* key)
 
 const gchar* spino_database_get_string_value(SpinoDatabase* self, const gchar* key)
 {
-    return g_strdup(self->db->get_string_value(key));
+    return self->db->get_string_value(key);
 }
 
 gboolean spino_database_has_key(SpinoDatabase* self, const gchar* key)

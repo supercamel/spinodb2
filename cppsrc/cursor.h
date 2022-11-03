@@ -1,41 +1,40 @@
 #ifndef SPINO_CURSOR_H
 #define SPINO_CURSOR_H
 
-#include "index.h"
 #include "query_parser.h"
 #include "query_executor.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+
+#include <iostream>
+using namespace std;
+
 
 namespace Spino
 {
     class Cursor
     {
     public:
-        Cursor(DomAllocator &alloc, std::vector<unique_ptr<Index>> &indices, const char *query_original) : alloc(alloc), indices(indices), executor(alloc)
+        Cursor(std::vector<Index>* indices, const std::string &query) : indices(indices), query(query), query_parser(*indices, query.c_str())
         {
-            limit = 0;
+            limit = SIZE_MAX;
             n_results = 0;
-            query = strdup(query_original);
-            QueryParser query_parser(alloc, indices, query);
-            instructions = query_parser.parse_query(range);
 
+            instructions = *query_parser.parse_query(range);
             executor.set_instructions(&instructions);
+
             iter = range.first;
-            while (iter)
+            if (iter != range.second)
             {
-                bool r = executor.execute_query(iter->dom_node);
-                if (r)
+                while (executor.execute_query(*iter->second) == false)
                 {
-                    break;
-                }
-                else
-                {
-                    if (iter == range.last)
+                    auto second = iter->second;
+
+                    iter++;
+                    second = iter->second;
+                    if (iter == range.second)
                     {
-                        iter = nullptr;
-                    }
-                    else
-                    {
-                        iter = iter->get_next();
+                        break;
                     }
                 }
             }
@@ -43,88 +42,94 @@ namespace Spino
 
         ~Cursor()
         {
-            free((void *)query);
         }
 
         bool has_next()
         {
-            if (iter == nullptr)
+            if ((n_results < limit) && (iter != range.second))
+            {
+                return true;
+            }
+            else
             {
                 return false;
             }
+        }
+
+        char *next()
+        {
+            const DomView *result = next_dom();
+            rapidjson::StringBuffer sb;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+            if (result != nullptr)
+            {
+                result->stringify(writer);
+                return strdup(sb.GetString());
+            }
             else
             {
-                if (limit == 0 || (n_results < limit))
-                {
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
+                return strdup("");
             }
         }
 
-        std::string next()
+        DomView *next_dom()
         {
-            const DomNode* result = next_dom();
-            if(result != nullptr)
+            if (has_next())
             {
-                return result->stringify();
-            }
-            else
-            {
-                return "";
-            }
-        }
+                auto second = iter->second;
+                DomNode *ret = (*second);
 
-        const DomNode *next_dom()
-        {
-            n_results++;
-            const DomNode *ret = iter->dom_node;
-            if (iter == range.last)
-            {
-                iter = nullptr;
-            }
-            else
-            {
-                iter = iter->get_next();
-                while (iter)
+                n_results++;
+
+            
+                while (++iter != range.second)
                 {
-                    bool r = executor.execute_query(iter->dom_node);
-                    if (r)
+                    if (executor.execute_query(*iter->second))
                     {
                         break;
                     }
-                    else
-                    {
-                        if (iter == range.last)
-                        {
-                            iter = nullptr;
-                        }
-                        else
-                        {
-                            iter = iter->get_next();
-                        }
-                    }
                 }
+
+                return ret;
             }
-            return ret;
+            else
+            {
+                return nullptr;
+            }
         }
 
-        Cursor *set_limit(size_t l)
+        size_t count()
+        {
+            size_t r = 0;
+            auto itr = range.first;
+            while (itr != range.second)
+            {
+                if (executor.execute_query(*itr->second))
+                {
+                    r++;
+                }
+                itr++;
+            }
+            return r;
+        }
+
+        IndexIterator get_iter()
+        {
+            return iter;
+        }
+
+        void set_limit(size_t l)
         {
             limit = l;
-            return this;
         }
 
     private:
-        DomAllocator &alloc;
-        std::vector<std::unique_ptr<Index>> &indices;
-        Index::Range range;
-        const char *query;
+        std::vector<Index>* indices;
+        IndexIterator iter;
+        IndexIteratorRange range;
+        std::string query;
         std::vector<Token> instructions;
-        Index::SkipListNode *iter;
+        QueryParser query_parser;
         QueryExecutor executor;
         size_t limit;
         size_t n_results;

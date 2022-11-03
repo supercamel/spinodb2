@@ -11,7 +11,12 @@ using namespace std;
 #include <cstring>
 #include <fstream>
 #include <map>
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/rapidjson.h"
 #include "dom_arr.h"
+#include "dom_obj.h"
+#include "objpool.h"
 
 namespace Spino
 {
@@ -77,6 +82,7 @@ namespace Spino
                     cout << "SpinoDB:: unescape: unknown escape sequence in string.\n"
                         << str << endl;
                     cout << str[i - 1] << endl;
+                    throw std::runtime_error("Invalid escape sequence");
                 }
             }
             else
@@ -87,13 +93,14 @@ namespace Spino
         return result;
     }
 
-    enum DOM_NODE_TYPE
+    enum DOM_NODE_TYPE : uint8_t
     {
         DOM_NODE_TYPE_INVALID,
         DOM_NODE_TYPE_INT,
         DOM_NODE_TYPE_UINT,
         DOM_NODE_TYPE_DOUBLE,
-        DOM_NODE_TYPE_STRING,
+        DOM_NODE_TYPE_LONG_STRING,
+        DOM_NODE_TYPE_SHORT_STRING,
         DOM_NODE_TYPE_BOOL,
         DOM_NODE_TYPE_OBJECT,
         DOM_NODE_TYPE_ARRAY,
@@ -113,7 +120,8 @@ namespace Spino
                 return "uint";
             case DOM_NODE_TYPE_DOUBLE:
                 return "double";
-            case DOM_NODE_TYPE_STRING:
+            case DOM_NODE_TYPE_LONG_STRING:
+            case DOM_NODE_TYPE_SHORT_STRING:
                 return "string";
             case DOM_NODE_TYPE_BOOL:
                 return "bool";
@@ -129,16 +137,26 @@ namespace Spino
         return "";
     }
 
+    struct String {
+        uint32_t len;
+        const char *str;
+    };
+
+    struct ShortString {
+        uint8_t len;
+        char str[15];
+    };
 
     union DomNodeValue
     {
         int64_t i;
         uint64_t u;
         double d;
-        std::string* str;
+        String str;
+        ShortString sstr;
         bool b;
         void* ptr;
-        uint8_t bytes[8];
+        uint8_t bytes[16];
     };
 
 
@@ -147,16 +165,38 @@ namespace Spino
         public:
             DomView();
 
+            constexpr DomView(const DomView &other) : type(other.type), value(other.value) {}
+
             friend class DomNode;
+
+            bool is_numeric() const;
+            double get_numeric_as_double() const;
+
+            bool is_string() const;
+
+            // assignment operator
+            DomView& operator=(const DomView& other);
+
+
+            bool operator==(const DomView &other) const;
+            bool operator>=(const DomView &other) const;
+            bool operator<=(const DomView &other) const;
+            bool operator>(const DomView &other) const;
+            bool operator<(const DomView &other) const;
+
+            bool equals(DomView *other) const;
+
 
             inline int get_int() const { return value.i; }
             inline uint64_t get_uint() const { return value.u; }
-            const std::string& get_string() const;
+            const char* get_string() const;
+            uint32_t get_string_length() const;
             double get_double() const;
             bool get_bool() const;
             inline DOM_NODE_TYPE get_type() const { return type; }
 
-            void to_not_bson(std::ofstream &fout) const;
+            void to_not_bson(std::ostream &fout) const;
+            void to_not_bson_buff(std::vector<char> &buff) const;
 
             bool has_member(const std::string& name) const;
             const DomView& get_member(const std::string& name) const;
@@ -165,6 +205,10 @@ namespace Spino
             ElementIterator element_begin() const;
             ElementIterator element_end() const;
 
+            MemberIterator member_begin() const;
+            MemberIterator member_end() const;
+
+            void stringify(rapidjson::Writer<rapidjson::StringBuffer>& sb) const;
             std::string stringify() const;
         protected:
             DOM_NODE_TYPE type;
@@ -185,19 +229,18 @@ namespace Spino
 
             DomNode();
             DomNode(DOM_NODE_TYPE _type);
-            DomNode(const char *str);
+            DomNode(const std::string& str);
+            DomNode(const char *str, size_t len, bool copy);
             DomNode(int i);
+            DomNode(uint u);
+            DomNode(int64_t i);
+            DomNode(uint64_t u);
+            DomNode(double d);
+            DomNode(bool b);
             DomNode &operator=(DomNode &other);
+
+            DomNode(const DomNode& other) = delete;
             ~DomNode();
-
-            bool is_numeric() const;
-            double get_numeric_as_double() const;
-
-            bool operator==(const DomNode &other);
-            bool operator>=(const DomNode &other);
-            bool operator<=(const DomNode &other);
-            bool operator>(const DomNode &other);
-            bool operator<(const DomNode &other);
 
             void set_invalid();
             void set_object();
@@ -206,19 +249,26 @@ namespace Spino
             void set_uint(uint64_t u);
             void set_double(double d);
             void set_bool(bool b);
-            void set_string(const std::string& c);
+            void set_string(const char* c, size_t len, bool copy);
             void set_null();
 
             void copy(const DomView *other);
-            void from_not_bson(std::ifstream &fin);
+            void from_not_bson(std::ifstream &fin, DOM_NODE_TYPE node_type);
 
-            void add_member(const std::string& name, DomNode &node);
-            void push_back(DomNode &node);
+            void add_member(const std::string& name, DomNode* node);
+            void push_back(DomNode* node);
 
             void destroy();
         private:
-            DomNode(const DomNode& other);
+
+            static constexpr uint32_t MAX_SHORT_STRING_LEN = 15;
     };
+
+    typedef ObjectAllocator<DomNode, 1024> DomNodeAllocatorType;
+    extern DomNodeAllocatorType dom_node_allocator;
+
+    typedef ObjectAllocator<char[16], 1024> SmallStringAllocatorType;
+    extern SmallStringAllocatorType small_string_allocator;
 }
 
 #endif

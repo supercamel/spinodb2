@@ -12,6 +12,7 @@
 #include "query_executor.h"
 #include "cursor.h"
 #include "journal.h"
+#include "rapidjson/document.h"
 
 #include <iostream>
 
@@ -24,14 +25,6 @@ namespace Spino
     using std::chrono::high_resolution_clock;
     using std::chrono::milliseconds;
 
-    class Index {
-        public:
-            Index(const std::string& field_name) : field_name(field_name) {}
-
-            std::string field_name;
-            std::multimap<DomView, DomView> map;
-    };
-
     class Collection
     {
     public:
@@ -40,24 +33,31 @@ namespace Spino
         const std::string& get_name() { return name; }
         void create_index(const std::string& name);
         void drop_index(const std::string& name);
-        const DomView& find_one(const std::string& query);
-        const DomView& find_one(const std::string& index_key, const DomView& value);
-        unique_ptr<Cursor> find(const std::string& query);
+        const char* find_one(const char* query);
+        DomView* find_one_dom(const std::string& query);
+        DomView* find_one_dom(const std::string& index_key, const DomView& value);
+        shared_ptr<Cursor> find(const std::string& query);
         size_t drop(const std::string& query, size_t limit = 1);
         void upsert(const std::string& query, DomNode *replacement);
-        void upsert(const std::string& query, const std::string& json);
+        bool upsert(const std::string& query, const std::string& json);
         void append(DomNode *node);
         bool append(const std::string& json);
         size_t size();
-        std::vector<unique_ptr<Index>> &get_indices();
+        std::vector<Index>* get_indices();
         void print();
 
+        void clear();
+
+        void to_not_bson(std::ostream& out);
+
     private:
-        void drop_one_by_id(uint64_t id);
+        void drop_one_by_iter(NodeListIterator id);
+        rapidjson::StringBuffer sb;
+        rapidjson::Writer<rapidjson::StringBuffer> writer;
 
         std::string name;
-        std::multimap<size_t, DomNode> nodes;
-        std::vector<unique_ptr<Index>> indexes;
+        ContainerType nodes;
+        std::vector<Index> indices;
         uint64_t id;
         QueryExecutor executor;
         JournalWriter &jw;

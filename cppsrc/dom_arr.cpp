@@ -19,7 +19,7 @@ namespace Spino {
 
     DomArray::~DomArray() {
         for(auto i : elements) {
-            delete i;
+            dom_node_allocator.delete_object(i);
         }
     }
 
@@ -28,11 +28,9 @@ namespace Spino {
         return *elements.at(pos);
     }
 
-    void DomArray::push_back(DomNode& val)
+    void DomArray::push_back(DomNode* val)
     {
-        DomNode* n = new DomNode();
-        *n = val;
-        elements.push_back(n);
+        elements.push_back(val);
     }
 
 
@@ -46,21 +44,16 @@ namespace Spino {
         return ElementIterator(&elements, elements.end());
     }
 
-    std::string DomArray::stringify() const
+    void DomArray::stringify(rapidjson::Writer<rapidjson::StringBuffer>& sb) const
     {
-        std::stringstream ss;
-        ss << "[";
+        sb.StartArray();
         size_t count = 0;
         size_t size = elements.size();
 
         for(auto& element : elements) {
-            ss << element->stringify();
-            if(++count != size) {
-                ss << ",";
-            }
+            element->stringify(sb);
         }
-        ss << "]";
-        return ss.str();
+        sb.EndArray();
     }
 
 }

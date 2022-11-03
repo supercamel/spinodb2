@@ -11,12 +11,24 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE(SpinoCollection, spino_collection, Spino, Collection, GObject)
 
+/**
+ * spino_collection_get_name:
+ * @self: the self
+ * Returns: (transfer full):
+ */
 gchar* spino_collection_get_name(SpinoCollection* self);
 void spino_collection_create_index(SpinoCollection* self, const gchar* name);
 void spino_collection_drop_index(SpinoCollection* self, const gchar* name);
 void spino_collection_append(SpinoCollection* self, const gchar* doc);
 void spino_collection_upsert(SpinoCollection* self, const gchar* query, const gchar* doc);
-gchar* spino_collection_find_one(SpinoCollection* self, const gchar* query);
+
+/**
+ * spino_collection_find_one:
+ * @self: the self
+ * @query: the query
+ * Returns: (transfer none):
+ */
+const gchar* spino_collection_find_one(SpinoCollection* self, const gchar* query);
 
 /**
  * spino_collection_find:

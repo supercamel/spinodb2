@@ -2,14 +2,15 @@
 
 import gi
 import json
+import time
 
 gi.require_version("Spino", "1.2")
 from gi.repository import Spino
 
+
 db = Spino.Database.new()
 col = db.get_collection("test")
-col.create_index("name")
-col.create_index("species")
+col.create_index("i")
 
 print("appending documents")
 
@@ -34,3 +35,17 @@ cursor = col.find("{}")
 
 while(cursor.has_next()):
     print(cursor.next())
+
+# add a million documents
+for i in range(0, 1000000):
+    doc = { "name": "Camel", "i": i }
+    col.append(json.dumps(doc))
+
+print("dropping")
+# now drop them
+start = time.time()
+for i in range(0, 1):
+    col.drop_one("{i:" + str(999999-i) + "}")
+    print(i)
+end = time.time()
+print("dropped 1 million documents in " + str(end - start) + " seconds")

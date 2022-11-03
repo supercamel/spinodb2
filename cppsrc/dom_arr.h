@@ -3,6 +3,8 @@
 
 #include <vector>
 #include <string>
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 namespace Spino {
     class ElementIterator
@@ -39,13 +41,13 @@ namespace Spino {
         public:
             DomArray();
             ~DomArray();
-            void push_back(class DomNode& val);
+            void push_back(DomNode* val);
 
             const class DomView& get_index(size_t pos) const;
             ElementIterator element_begin() const;
             ElementIterator element_end() const;
 
-            std::string stringify() const;
+            void stringify(rapidjson::Writer<rapidjson::StringBuffer>& sb) const;
 
         private:
             std::vector<class DomNode*> elements;

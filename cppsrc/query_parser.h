@@ -22,15 +22,30 @@
 #define QUERY_PARSER_H
 
 #include <string>
+#include <list>
 #include <memory>
 #include <exception>
 #include <regex>
+#include "dom_node.h"
 
-#include "index.h"
 using namespace std;
 
 namespace Spino
 {
+
+    typedef std::list<DomNode*> ContainerType;
+	typedef ContainerType::iterator NodeListIterator;
+	typedef std::multimap<DomView, NodeListIterator, std::less<DomView>> IndexType;
+	typedef IndexType::const_iterator IndexIterator;
+	typedef std::pair<IndexIterator, IndexIterator> IndexIteratorRange;
+
+    class Index {
+        public:
+            Index(std::string field_name) : field_name(field_name) {}
+            std::string field_name;
+            IndexType index;
+    };
+
 
 	class parse_error : public exception
 	{
@@ -147,25 +162,26 @@ namespace Spino
 		}
 
 		TOKEN token;
-		const char *raw;
+		const char* raw;
 		size_t len;
 		double value;
 		shared_ptr<std::regex> regex;
 	};
 
 	/**
-	 * QueryParser parses the query into a Query Tree
+	 * QueryParser parses the query into an instruction list
+	 * It also isolates the query results to a range of an index
 	 **/
 
 	class QueryParser
 	{
 	public:
-		QueryParser(const std::vector<std::unique_ptr<Index>> &indicies, const char *text);
+		QueryParser(const std::vector<Index> &indicies, const char *text);
 
-		std::vector<Token> &parse_query(Index::Range &range);
+		std::vector<Token>* parse_query(IndexIteratorRange &range);
 
 	private:
-		const char *query_string;
+		std::string query_string;
 		uint32_t cursor = 0;
 
 		const char *cursor_ptr()
@@ -195,11 +211,10 @@ namespace Spino
 		void parse_literal();
 		void parse_literal_list();
 
-		DomNode token_literal_to_node(Token t);
+		DomNode* token_literal_to_node(Token t);
 
-		DomAllocator &alloc;
-		const std::vector<std::unique_ptr<Index>> &indicies;
-		Index::Range range;
+		const std::vector<Index> &indicies;
+		IndexIteratorRange range;
 		bool index_resolved;
 
 		std::vector<Token> instructions;

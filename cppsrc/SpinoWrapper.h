@@ -24,29 +24,28 @@
 
 #include <node.h>
 #include <node_object_wrap.h>
-#include "SpinoDB.h"
+#include "database.h"
+
 
 
 class CursorWrapper: public node::ObjectWrap {
 	public:
-		CursorWrapper(Spino::Cursor* cursor) : cursor(cursor) { }
-		~CursorWrapper() { delete cursor; }
+		CursorWrapper(shared_ptr<Spino::Cursor> cursor) : cursor(cursor) { }
+		~CursorWrapper() {  }
 
 		static void Init(v8::Isolate* isolate);
-		static void NewInstance(const v8::FunctionCallbackInfo<v8::Value>& args, Spino::Cursor* cur);
+		static void NewInstance(const v8::FunctionCallbackInfo<v8::Value>& args, shared_ptr<Spino::Cursor> cur);
 	private:
 
 		static void next(const v8::FunctionCallbackInfo<v8::Value>& args);
         static void hasNext(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void toArray(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void count(const v8::FunctionCallbackInfo<v8::Value>& args);
-        static void setProjection(const v8::FunctionCallbackInfo<v8::Value>& args);
         static void setLimit(const v8::FunctionCallbackInfo<v8::Value>& args);
-        static void runScript(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 
 		static v8::Global<v8::Function> constructor;
-		Spino::Cursor* cursor;
+		shared_ptr<Spino::Cursor> cursor;
 };
 
 
@@ -65,16 +64,11 @@ class CollectionWrapper: public node::ObjectWrap {
 		static void createIndex(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void dropIndex(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void append(const v8::FunctionCallbackInfo<v8::Value>& args);
-		static void updateById(const v8::FunctionCallbackInfo<v8::Value>& args);
-		static void update(const v8::FunctionCallbackInfo<v8::Value>& args);
-		static void findOneById(const v8::FunctionCallbackInfo<v8::Value>& args);
+		static void upsert(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void findOne(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void find(const v8::FunctionCallbackInfo<v8::Value>& args);
-		static void dropById(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void dropOne(const v8::FunctionCallbackInfo<v8::Value>& args);
 		static void drop(const v8::FunctionCallbackInfo<v8::Value>& args);
-		static void dropOlderThan(const v8::FunctionCallbackInfo<v8::Value>& args);
-		static void timestampById(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 
 
@@ -119,7 +113,7 @@ class SpinoWrapper: public node::ObjectWrap {
 
         static void hasKey(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-		Spino::SpinoDB* spino; 
+		Spino::Database* spino; 
 };
 
 #endif

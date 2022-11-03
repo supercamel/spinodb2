@@ -1,132 +1,129 @@
 #include "collection.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 namespace Spino
 {
-    Collection::Collection(const std::string& name, JournalWriter &jw) : name(name), jw(jw)
+    Collection::Collection(const std::string &name, JournalWriter &jw) : name(name), jw(jw)
     {
-        indexes.push_back(make_unique<UintIndex>("_id"));
+        indices.push_back({"_id"});
         id = 0;
     }
 
     Collection::~Collection()
     {
-        // the DOM nodes must be destroyed because some string values/keys might be
-        // allocated using the system allocator. failure to free = leaked memory
-        // everything else is free'd when the dom allocator is destroyed
-        for(auto& node : nodes )
+        while (nodes.size())
         {
-            node.second.destroy();
+            auto *node = nodes.back();
+            dom_node_allocator.delete_object(node);
+            nodes.pop_back();
         }
     }
 
-    void Collection::create_index(const std::string& name)
+    void Collection::create_index(const std::string &name)
     {
-        std::vector<std::string> tokens;
-        std::string delimiter = ".";
+        indices.push_back({name});
 
-        size_t pos = 0;
-        while ((pos = name.find(delimiter)) != std::string::npos) {
-            tokens.push_back(s.substr(0, pos));
-            s.erase(0, pos + delimiter.length());
-        }
-
-        indexes.push_back(make_unique<Index>(name));
-
-        auto &index = indexes[indexes.size() - 1];
+        auto &index = indices[indices.size() - 1];
         size_t count = 0;
-        for(auto& node : nodes)
+
+        NodeListIterator iter = nodes.begin();
+        while (iter != nodes.end())
         {
-            DomView view;
-
-            for(auto& token : tokens) {
-                if(node.second.has_member(token)) {
-                    view = node.second.get_member(token);
-                }
+            if ((*iter)->has_member(name))
+            {
+                auto &member = (*iter)->get_member(name);
+                index.index.insert({member, iter});
+                count++;
             }
-
-            index->map.insert({view, node.second});
+            iter++;
         }
     }
 
-    void Collection::drop_index(const std::string& name)
+    void Collection::drop_index(const std::string &name)
     {
-        for (size_t i = 0; i < indexes.size(); i++)
+        for (auto &idx : indices)
         {
-            if (indexes[i]->field_name == name)
+            if (idx.field_name == name)
             {
-                indexes[i] = std::move(indexes[indexes.size() - 1]);
-                indexes.resize(indexes.size() - 1);
+                indices.erase(indices.begin() + (&idx - &indices[0]));
                 return;
             }
         }
     }
 
-    const DomView& Collection::find_one(const std::string& query)
+    const char *Collection::find_one(const char *query)
     {
-        Spino::Index::Range range;
-
-        Spino::QueryParser qp(get_indices(), query);
-        auto &instructions = qp.parse_query(range);
-
-        executor.set_instructions(&instructions);
+        QueryParser query_parser(indices, query);
+        IndexIteratorRange range;
+        auto instructions = query_parser.parse_query(range);
+        executor.set_instructions(instructions);
         auto iter = range.first;
-        while (iter)
+        while (iter != range.second)
         {
-            bool r = executor.execute_query(iter->dom_node);
-
-            if (r)
+            if(executor.execute_query(*iter->second) == true)
             {
-                cout << iter->dom_node << endl;
-                cout << "find one result: " << iter->dom_node->stringify() << endl;
-                return iter->dom_node;
+                sb.Clear();
+                writer.Reset(sb);
+                (*iter->second)->stringify(writer);
+                return sb.GetString();
             }
-            iter = iter->get_next();
-            if (iter == range.last)
-            {
-                break;
+            else {
+                iter++;
             }
         }
-        return nullptr;
+        return "";
     }
 
-    const DomNode *Collection::find_one(const char *index_key, DomNode *value)
+    DomView *Collection::find_one_dom(const std::string &query)
     {
-        for (auto &idx : indexes)
+        auto cursor = find(query);
+        DomView *next = cursor->next_dom();
+        return next;
+    }
+
+    DomView *Collection::find_one_dom(const std::string &index_key, const DomView &value)
+    {
+        for (auto &idx : indices)
         {
-            if (strcmp(idx->get_key(), index_key) == 0)
+            if (idx.field_name == index_key)
             {
-                auto result = idx->find_first(value);
-                if (result)
+                auto result = idx.index.find(value);
+                if (result != idx.index.end())
                 {
-                    return result->dom_node;
+                    return *result->second;
                 }
             }
         }
         return nullptr;
     }
 
-    unique_ptr<Cursor> Collection::find(const char *query)
+    shared_ptr<Cursor> Collection::find(const std::string &query)
     {
-        return make_unique<Cursor>(alloc, get_indices(), query);
+        return shared_ptr<Cursor>(new Cursor(get_indices(), query));
     }
 
-    DomNode *Collection::create_node()
-    {
-        return make_dom_node(alloc);
-    }
-
-    size_t Collection::drop(const char *query, size_t limit)
+    size_t Collection::drop(const std::string &query, size_t limit)
     {
         size_t ret = 0;
-        auto cursor = find(query)->set_limit(limit);
         bool jwenabled = jw.get_enabled();
         jw.set_enabled(false);
-        while (cursor->has_next())
+
+        while (ret < limit && nodes.size())
         {
-            const DomNode *dom = cursor->next_dom();
-            drop_one_by_id(dom->get_member("_id", 3)->get_uint());
-            ret++;
+            auto cursor = find(query);
+            if (cursor->has_next())
+            {
+                auto iter = cursor->get_iter();
+                drop_one_by_iter(iter->second);
+                ret++;
+            }
+            else
+            {
+                break;
+            }
         }
+
         jw.set_enabled(jwenabled);
 
         if (jw.get_enabled())
@@ -141,94 +138,183 @@ namespace Spino
         return ret;
     }
 
-    void Collection::upsert(const char *query, DomNode *replacement)
+    void Collection::upsert(const std::string &query, DomNode *replacement)
     {
         drop(query, 1);
         append(replacement);
 
         if (jw.get_enabled())
         {
-            stringstream ss;
-            ss << "{\"cmd\":\"upsert\",\"collection\":\"";
-            ss << escape(name);
-            ss << "\",\"query\":\"" << escape(query);
-            ss << "\",\"document\":\"";
-            ss << escape(replacement->stringify()) << "\"}";
-            jw.append(ss.str());
+            rapidjson::StringBuffer sb;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
+            writer.StartObject();
+            writer.Key("cmd");
+            writer.String("upsert");
+            writer.Key("collection");
+            writer.String(name.c_str());
+            writer.Key("query");
+            writer.String(query.c_str());
+            writer.Key("document");
+            replacement->stringify(writer);
+            writer.EndObject();
+            jw.append(sb.GetString());
         }
     }
 
-    void Collection::upsert(const char *query, const char *json)
+    bool Collection::upsert(const std::string &query, const std::string &json)
     {
-        upsert(query, parser->parse(json));
+        Parser parser;
+        DomNode *dom = parser.parse(json);
+        if (dom == nullptr)
+        {
+            return false;
+        }
+        else
+        {
+            upsert(query, dom);
+            return true;
+        }
     }
 
     void Collection::append(DomNode *node)
     {
-        DomNode *actual_node = node;
-
-        DomNode* id_node = actual_node->get_member("_id");
-        if(id_node == nullptr)
+        if (node->get_type() != DOM_NODE_TYPE_OBJECT)
         {
-            id_node = actual_node->push_in_place();
+            cout << "Error: Can only append objects to collections" << endl;
+            return;
+        }
+
+        if (node->has_member("_id") == false)
+        {
+            DomNode *id_node = dom_node_allocator.make();
+            id_node->set_uint(id++);
+            node->add_member("_id", id_node);
         }
         else
         {
-            id_node->destroy();
+            auto &id_node = node->get_member("_id");
+            if (id_node.get_type() == DOM_NODE_TYPE_UINT)
+            {
+                if (id_node.get_uint() >= id)
+                {
+                    id = id_node.get_uint() + 1;
+                }
+            }
+            else
+            {
+                cout << "Error: _id must be an unsigned integer" << endl;
+                return;
+            }
         }
-        id_node->set_uint(id++);
-        id_node->set_key("_id", (size_t)3);
 
-        for (auto &index : indexes)
+        nodes.emplace_back(node);
+
+        auto end = nodes.end();
+        end--;
+
+        for (auto &index : indices)
         {
-            index->insert(actual_node);
+            if (node->has_member(index.field_name))
+            {
+                DomView member = node->get_member(index.field_name);
+                index.index.insert(std::make_pair(member, end));
+            }
         }
 
         if (jw.get_enabled())
         {
-            stringstream ss;
-            ss << "{\"cmd\":\"append\",\"collection\":\"";
-            ss << escape(name);
-            ss << "\",\"document\":\"";
-            ss << escape(node->stringify()) << "\"}";
-            jw.append(ss.str());
+            rapidjson::StringBuffer sb;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+            writer.StartObject();
+            writer.Key("cmd");
+            writer.String("append");
+            writer.Key("collection");
+            writer.String(name.c_str());
+            writer.Key("document");
+            node->stringify(writer);
+            writer.EndObject();
+            jw.append(sb.GetString());
         }
     }
 
-    bool Collection::append(const char *json)
+    bool Collection::append(const std::string &json)
     {
-        append(parser->parse(json));
-        return true;
+        Parser parser;
+        DomNode *node = parser.parse(json);
+        if (node == nullptr)
+        {
+            return false;
+        }
+        else
+        {
+            append(node);
+            return true;
+        }
     }
 
     size_t Collection::size()
     {
-        return indexes[0]->size();
+        return nodes.size();
     }
 
-    DomAllocator &Collection::get_allocator() { return alloc; }
-    std::vector<unique_ptr<Index>> &Collection::get_indices() { return indexes; }
+    std::vector<Index>* Collection::get_indices() { return &indices; }
 
-    void Collection::print() { indexes[0]->print(); }
-
-    void Collection::drop_one_by_id(uint64_t id)
+    void Collection::clear()
     {
-        DomNode id_node(alloc);
-        id_node.set_uint(id);
-        auto result = indexes[0]->find_first(&id_node);
-
-        for (size_t i = 1; i < indexes.size(); i++)
+        for (auto &node : nodes)
         {
-            if (result->dom_node->has_member(indexes[i]->get_key(), strlen(indexes[i]->get_key())))
+            dom_node_allocator.delete_object(node);
+        }
+        nodes.clear();
+
+        for (auto &index : indices)
+        {
+            index.index.clear();
+        }
+    }
+
+    void Collection::drop_one_by_iter(NodeListIterator iter)
+    {
+        for (auto &index : indices)
+        {
+            if ((*iter)->has_member(index.field_name))
             {
-                indexes[i]->delete_node(result->dom_node);
+                DomView value = (*iter)->get_member(index.field_name);
+                auto range = index.index.equal_range(value);
+
+                auto it = range.first;
+                // iterate range and erase all elements with the same value
+                while (it != index.index.end())
+                {
+                    if (it->second == iter)
+                    {
+                        it = index.index.erase(it);
+                        break;
+                    }
+                    else if (it == range.second)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        it++;
+                    }
+                }
             }
         }
 
-        indexes[0]->delete_node(result->dom_node);
-        result->dom_node->destroy();
+        dom_node_allocator.delete_object(*iter);
+        nodes.erase(iter);
     }
 
+    void Collection::to_not_bson(std::ostream &os)
+    {
+        for (auto &node : nodes)
+        {
+            os.put(DOM_NODE_TYPE_OBJECT);
+            node->to_not_bson(os);
+        }
+    }
 
 }
-

@@ -8,10 +8,10 @@ G_BEGIN_DECLS
 
 struct _SpinoCursor{
     GObject parent_instance;
-    std::unique_ptr<Spino::Cursor> priv;
+    shared_ptr<Spino::Cursor> priv;
 };
 
-SpinoCursor* spino_cursor_new(std::unique_ptr<Spino::Cursor>& cursor);
+SpinoCursor* spino_cursor_new(shared_ptr<Spino::Cursor> cursor);
 
 G_END_DECLS
 

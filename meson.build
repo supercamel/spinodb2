@@ -1,6 +1,8 @@
 project('spino-1.2', 'c', 'cpp', 'vala',
   version: '0.1.2',
-  license: 'MIT')
+  license: 'MIT',
+  default_options: ['cpp_std=c++17',  'buildtype=release'],
+)
 
 gnome = import('gnome')
 pkg = import('pkgconfig')
@@ -23,7 +25,9 @@ spino_sources= [
   'cppsrc/database.cpp',
   'cppsrc/dom_node.cpp',
   'cppsrc/collection.cpp',
-  'cppsrc/index.cpp',
+  'cppsrc/dom_arr.cpp',
+  'cppsrc/dom_obj.cpp',
+  'cppsrc/dom_node.cpp',
   'spino_gobject/src/database.cpp',
   'spino_gobject/src/collection.cpp',
   'spino_gobject/src/cursor.cpp', 
