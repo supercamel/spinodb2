@@ -19,12 +19,10 @@ col.append(json.dumps(doc))
 def greaterAndLessThan():
     cursor = col.find("{score: {$gt: 12000}}")
 
-    print("here\n")
     n = json.loads(cursor.next())["name"]
     if(n != "Steve"):
         print("$gt test failed")
     cursor = col.find("{score: {$lt: 12000}}")
-    print("here\n")
     n = json.loads(cursor.next())["name"]
     if(n != "Camel"):
         print("$lt test failed")
@@ -69,9 +67,9 @@ def existsTypeStartsWith():
 
 
 greaterAndLessThan()
-##eqAndNeq()
-##inNin()
-##existsTypeStartsWith()
+eqAndNeq()
+inNin()
+existsTypeStartsWith()
 
 
 

@@ -5,7 +5,7 @@ import json
 
 import time
 
-gi.require_version("Spino", "1.2")
+gi.require_version("Spino", "1.0")
 from gi.repository import Spino
 
 db = Spino.Database.new()
@@ -22,12 +22,14 @@ end = time.time()
 print(end - start)
 
 start = time.time()
-cursor = col.find("{$and: [{x: 100}, {y: 500}]}").set_limit(1)
+cursor = col.find("{$and: [{x: 100}, {y: {$gt: 500}}]}")
+cursor.set_limit(1000)
+
+
+while(cursor.has_next()):
+    cursor.next()
+
 end = time.time()
 print(end - start)
 
 
-
-
-while(cursor.has_next()):
-    print(cursor.next())
